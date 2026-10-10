@@ -1,0 +1,568 @@
+{
+  "meta": {
+    "project": "carte-blanche",
+    "version": "0.1.0",
+    "capturedAt": "2026-10-10T09:53:02.105Z",
+    "rails": "mock",
+    "note": "Byte-for-byte record of a real run (scripts/capture-demo.ts). Signatures are real Ed25519 over canonical JSON; the signing key was discarded after capture — only this public key remains.",
+    "genesis": "sha256:carte-blanche/journal/genesis/v1",
+    "chainLength": 10,
+    "chainTip": "1dd691eb36f0bacfede37f1cc385745ca792a6ac4b8d1165f60133619ffe2227"
+  },
+  "publicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+  "mandate": {
+    "mandate": {
+      "id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+      "version": "cb-mandate/v1",
+      "principal": "Sam",
+      "agent": "shopping-agent-1",
+      "purpose": "team snacks this week",
+      "limits": {
+        "currency": "USD",
+        "maxPerTransaction": "30.00",
+        "maxTotalSpend": "60.00",
+        "windowStart": "2026-10-10T09:52:02.070Z",
+        "windowEnd": "2026-10-17T09:53:02.071Z"
+      },
+      "issuedAt": "2026-10-10T09:53:02.071Z"
+    },
+    "signature": "85h8/L8b0BpnMluzGD36oNLr1cNgW3yuyvpRrI1wnKx04pY8MFwY2ofQ6NPsJYHCuzujzZyPRXU0vPBO7yAJAw==",
+    "publicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw="
+  },
+  "events": [
+    {
+      "seq": 1,
+      "ts": "2026-10-10T09:53:02.077Z",
+      "type": "purchase_requested",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-1-coffee",
+        "amount": "25.00",
+        "amount_minor": "2500",
+        "currency": "USD",
+        "description": "coffee beans for the team"
+      },
+      "prevHash": "c00ab3acb5c237a98bd9c8d05791aae17e629417d5c3e90cc9ff1483beb0d204",
+      "hash": "5864a365b0601c0765fb5949722bd92d22376cd32352068692a387d41232df3a"
+    },
+    {
+      "seq": 2,
+      "ts": "2026-10-10T09:53:02.078Z",
+      "type": "order_created",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-1-coffee",
+        "order_id": "MOCK-0001",
+        "rails_mode": "mock",
+        "paypal_request_id": "cb-demo-1-coffee-cr"
+      },
+      "prevHash": "5864a365b0601c0765fb5949722bd92d22376cd32352068692a387d41232df3a",
+      "hash": "f4a15e7255dbec4fecb9d80bb3e352661ecda8066dea2c2262c3176d3a402135"
+    },
+    {
+      "seq": 3,
+      "ts": "2026-10-10T09:53:02.078Z",
+      "type": "order_captured",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-1-coffee",
+        "order_id": "MOCK-0001",
+        "capture_id": "MOCK-CAP-MOCK-0001",
+        "status": "COMPLETED",
+        "amount": "25.00",
+        "amount_minor": "2500",
+        "currency": "USD",
+        "rails_mode": "mock",
+        "paypal_request_id": "cb-demo-1-coffee-cp"
+      },
+      "prevHash": "f4a15e7255dbec4fecb9d80bb3e352661ecda8066dea2c2262c3176d3a402135",
+      "hash": "2a89fec80d5aa769e248a12a02450e52ba7275c8b4b538858f457f5b36e11045"
+    },
+    {
+      "seq": 4,
+      "ts": "2026-10-10T09:53:02.081Z",
+      "type": "purchase_requested",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-2-mat",
+        "amount": "30.00",
+        "amount_minor": "3000",
+        "currency": "USD",
+        "description": "standing desk mat"
+      },
+      "prevHash": "2a89fec80d5aa769e248a12a02450e52ba7275c8b4b538858f457f5b36e11045",
+      "hash": "3cdf6189e7fbcc94022981fcf46fe3b4c512147ad4e7b3605824aa23b09b4162"
+    },
+    {
+      "seq": 5,
+      "ts": "2026-10-10T09:53:02.082Z",
+      "type": "order_created",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-2-mat",
+        "order_id": "MOCK-0002",
+        "rails_mode": "mock",
+        "paypal_request_id": "cb-demo-2-mat-cr"
+      },
+      "prevHash": "3cdf6189e7fbcc94022981fcf46fe3b4c512147ad4e7b3605824aa23b09b4162",
+      "hash": "4a88cd547db80a66e2e7ff17193be7b0dbf1173b0a1d292b316b5e581660eee8"
+    },
+    {
+      "seq": 6,
+      "ts": "2026-10-10T09:53:02.083Z",
+      "type": "order_captured",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-2-mat",
+        "order_id": "MOCK-0002",
+        "capture_id": "MOCK-CAP-MOCK-0002",
+        "status": "COMPLETED",
+        "amount": "30.00",
+        "amount_minor": "3000",
+        "currency": "USD",
+        "rails_mode": "mock",
+        "paypal_request_id": "cb-demo-2-mat-cp"
+      },
+      "prevHash": "4a88cd547db80a66e2e7ff17193be7b0dbf1173b0a1d292b316b5e581660eee8",
+      "hash": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a"
+    },
+    {
+      "seq": 7,
+      "ts": "2026-10-10T09:53:02.085Z",
+      "type": "purchase_denied",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-3-over-cap",
+        "denial_id": "deny-accdcb1f2a16c400",
+        "requested": {
+          "amount": "25.00",
+          "currency": "USD"
+        },
+        "reason_code": "OVER_TOTAL_CAP",
+        "reason_detail": "cumulative cap 60.00 would be exceeded (already spent 55.00, remaining 5.00)"
+      },
+      "prevHash": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a",
+      "hash": "704908eb4117c71f04a8b3f066b81d9755d2402c025bfbd3e72720092082602e"
+    },
+    {
+      "seq": 8,
+      "ts": "2026-10-10T09:53:02.088Z",
+      "type": "purchase_denied",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-4-over-tx",
+        "denial_id": "deny-724410f42ec879cc",
+        "requested": {
+          "amount": "500.00",
+          "currency": "USD"
+        },
+        "reason_code": "OVER_PER_TRANSACTION",
+        "reason_detail": "requested 500.00 exceeds per-transaction cap 30.00"
+      },
+      "prevHash": "704908eb4117c71f04a8b3f066b81d9755d2402c025bfbd3e72720092082602e",
+      "hash": "fb70aacb72741cf53018323f628d6ba8126f4396aaf06bad62f9e0a0bfadbe1d"
+    },
+    {
+      "seq": 9,
+      "ts": "2026-10-10T09:53:02.091Z",
+      "type": "mandate_revoked",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "reason": "principal cut the card"
+      },
+      "prevHash": "fb70aacb72741cf53018323f628d6ba8126f4396aaf06bad62f9e0a0bfadbe1d",
+      "hash": "e6007c2ec4d823287a73dbf7fa2f6234f9c071e35986f1844263218ae790833d"
+    },
+    {
+      "seq": 10,
+      "ts": "2026-10-10T09:53:02.092Z",
+      "type": "purchase_denied",
+      "data": {
+        "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logical_key": "demo-5-after-revoke",
+        "denial_id": "deny-f294429104cdab7a",
+        "requested": {
+          "amount": "5.00",
+          "currency": "USD"
+        },
+        "reason_code": "MANDATE_REVOKED",
+        "reason_detail": "revoked at 2026-10-10T09:53:02.091Z (principal cut the card)"
+      },
+      "prevHash": "e6007c2ec4d823287a73dbf7fa2f6234f9c071e35986f1844263218ae790833d",
+      "hash": "1dd691eb36f0bacfede37f1cc385745ca792a6ac4b8d1165f60133619ffe2227"
+    }
+  ],
+  "outcomes": {
+    "demo-1-coffee": {
+      "kind": "receipt",
+      "receipt": {
+        "receiptId": "rcpt-1779a9bff82c7d97",
+        "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logicalKey": "demo-1-coffee",
+        "createdAt": "2026-10-10T09:53:02.078Z",
+        "amount": "25.00",
+        "currency": "USD",
+        "description": "coffee beans for the team",
+        "orderId": "MOCK-0001",
+        "captureId": "MOCK-CAP-MOCK-0001",
+        "status": "COMPLETED",
+        "chainTip": "2a89fec80d5aa769e248a12a02450e52ba7275c8b4b538858f457f5b36e11045",
+        "journalLength": 3
+      },
+      "full": {
+        "receipt": {
+          "receiptId": "rcpt-1779a9bff82c7d97",
+          "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "logicalKey": "demo-1-coffee",
+          "createdAt": "2026-10-10T09:53:02.078Z",
+          "amount": "25.00",
+          "currency": "USD",
+          "description": "coffee beans for the team",
+          "orderId": "MOCK-0001",
+          "captureId": "MOCK-CAP-MOCK-0001",
+          "status": "COMPLETED",
+          "chainTip": "2a89fec80d5aa769e248a12a02450e52ba7275c8b4b538858f457f5b36e11045",
+          "journalLength": 3
+        },
+        "mandate": {
+          "id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "version": "cb-mandate/v1",
+          "principal": "Sam",
+          "agent": "shopping-agent-1",
+          "purpose": "team snacks this week",
+          "limits": {
+            "currency": "USD",
+            "maxPerTransaction": "30.00",
+            "maxTotalSpend": "60.00",
+            "windowStart": "2026-10-10T09:52:02.070Z",
+            "windowEnd": "2026-10-17T09:53:02.071Z"
+          },
+          "issuedAt": "2026-10-10T09:53:02.071Z"
+        },
+        "mandateSignature": "85h8/L8b0BpnMluzGD36oNLr1cNgW3yuyvpRrI1wnKx04pY8MFwY2ofQ6NPsJYHCuzujzZyPRXU0vPBO7yAJAw==",
+        "mandatePublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "events": [
+          {
+            "seq": 1,
+            "ts": "2026-10-10T09:53:02.077Z",
+            "type": "purchase_requested",
+            "data": {
+              "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+              "logical_key": "demo-1-coffee",
+              "amount": "25.00",
+              "amount_minor": "2500",
+              "currency": "USD",
+              "description": "coffee beans for the team"
+            },
+            "prevHash": "c00ab3acb5c237a98bd9c8d05791aae17e629417d5c3e90cc9ff1483beb0d204",
+            "hash": "5864a365b0601c0765fb5949722bd92d22376cd32352068692a387d41232df3a"
+          },
+          {
+            "seq": 2,
+            "ts": "2026-10-10T09:53:02.078Z",
+            "type": "order_created",
+            "data": {
+              "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+              "logical_key": "demo-1-coffee",
+              "order_id": "MOCK-0001",
+              "rails_mode": "mock",
+              "paypal_request_id": "cb-demo-1-coffee-cr"
+            },
+            "prevHash": "5864a365b0601c0765fb5949722bd92d22376cd32352068692a387d41232df3a",
+            "hash": "f4a15e7255dbec4fecb9d80bb3e352661ecda8066dea2c2262c3176d3a402135"
+          },
+          {
+            "seq": 3,
+            "ts": "2026-10-10T09:53:02.078Z",
+            "type": "order_captured",
+            "data": {
+              "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+              "logical_key": "demo-1-coffee",
+              "order_id": "MOCK-0001",
+              "capture_id": "MOCK-CAP-MOCK-0001",
+              "status": "COMPLETED",
+              "amount": "25.00",
+              "amount_minor": "2500",
+              "currency": "USD",
+              "rails_mode": "mock",
+              "paypal_request_id": "cb-demo-1-coffee-cp"
+            },
+            "prevHash": "f4a15e7255dbec4fecb9d80bb3e352661ecda8066dea2c2262c3176d3a402135",
+            "hash": "2a89fec80d5aa769e248a12a02450e52ba7275c8b4b538858f457f5b36e11045"
+          }
+        ],
+        "receiptSignature": "js5wkmCzXFl7l0xIS7zwAdvkvI38RSP2tJ8oswtZ/9IPmAxVQIlvCWDA7yfl+22y28AjB3ktRZXCpOErYW0vDw==",
+        "receiptPublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "railsMode": "mock"
+      }
+    },
+    "demo-2-mat": {
+      "kind": "receipt",
+      "receipt": {
+        "receiptId": "rcpt-539d7f3d831c38cf",
+        "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logicalKey": "demo-2-mat",
+        "createdAt": "2026-10-10T09:53:02.083Z",
+        "amount": "30.00",
+        "currency": "USD",
+        "description": "standing desk mat",
+        "orderId": "MOCK-0002",
+        "captureId": "MOCK-CAP-MOCK-0002",
+        "status": "COMPLETED",
+        "chainTip": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a",
+        "journalLength": 6
+      },
+      "full": {
+        "receipt": {
+          "receiptId": "rcpt-539d7f3d831c38cf",
+          "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "logicalKey": "demo-2-mat",
+          "createdAt": "2026-10-10T09:53:02.083Z",
+          "amount": "30.00",
+          "currency": "USD",
+          "description": "standing desk mat",
+          "orderId": "MOCK-0002",
+          "captureId": "MOCK-CAP-MOCK-0002",
+          "status": "COMPLETED",
+          "chainTip": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a",
+          "journalLength": 6
+        },
+        "mandate": {
+          "id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "version": "cb-mandate/v1",
+          "principal": "Sam",
+          "agent": "shopping-agent-1",
+          "purpose": "team snacks this week",
+          "limits": {
+            "currency": "USD",
+            "maxPerTransaction": "30.00",
+            "maxTotalSpend": "60.00",
+            "windowStart": "2026-10-10T09:52:02.070Z",
+            "windowEnd": "2026-10-17T09:53:02.071Z"
+          },
+          "issuedAt": "2026-10-10T09:53:02.071Z"
+        },
+        "mandateSignature": "85h8/L8b0BpnMluzGD36oNLr1cNgW3yuyvpRrI1wnKx04pY8MFwY2ofQ6NPsJYHCuzujzZyPRXU0vPBO7yAJAw==",
+        "mandatePublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "events": [
+          {
+            "seq": 4,
+            "ts": "2026-10-10T09:53:02.081Z",
+            "type": "purchase_requested",
+            "data": {
+              "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+              "logical_key": "demo-2-mat",
+              "amount": "30.00",
+              "amount_minor": "3000",
+              "currency": "USD",
+              "description": "standing desk mat"
+            },
+            "prevHash": "2a89fec80d5aa769e248a12a02450e52ba7275c8b4b538858f457f5b36e11045",
+            "hash": "3cdf6189e7fbcc94022981fcf46fe3b4c512147ad4e7b3605824aa23b09b4162"
+          },
+          {
+            "seq": 5,
+            "ts": "2026-10-10T09:53:02.082Z",
+            "type": "order_created",
+            "data": {
+              "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+              "logical_key": "demo-2-mat",
+              "order_id": "MOCK-0002",
+              "rails_mode": "mock",
+              "paypal_request_id": "cb-demo-2-mat-cr"
+            },
+            "prevHash": "3cdf6189e7fbcc94022981fcf46fe3b4c512147ad4e7b3605824aa23b09b4162",
+            "hash": "4a88cd547db80a66e2e7ff17193be7b0dbf1173b0a1d292b316b5e581660eee8"
+          },
+          {
+            "seq": 6,
+            "ts": "2026-10-10T09:53:02.083Z",
+            "type": "order_captured",
+            "data": {
+              "mandate_id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+              "logical_key": "demo-2-mat",
+              "order_id": "MOCK-0002",
+              "capture_id": "MOCK-CAP-MOCK-0002",
+              "status": "COMPLETED",
+              "amount": "30.00",
+              "amount_minor": "3000",
+              "currency": "USD",
+              "rails_mode": "mock",
+              "paypal_request_id": "cb-demo-2-mat-cp"
+            },
+            "prevHash": "4a88cd547db80a66e2e7ff17193be7b0dbf1173b0a1d292b316b5e581660eee8",
+            "hash": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a"
+          }
+        ],
+        "receiptSignature": "D9T/Vx4Z9FgtKsLHG3e+ppu8xWm+Y0LANR242seyyyiGfxu7KQfrFgrRBOcoI/dwX55ihFT4RvhQ0Yw3pGK0CQ==",
+        "receiptPublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "railsMode": "mock"
+      }
+    },
+    "demo-3-over-cap": {
+      "kind": "denial",
+      "denial": {
+        "denialId": "deny-accdcb1f2a16c400",
+        "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logicalKey": "demo-3-over-cap",
+        "createdAt": "2026-10-10T09:53:02.085Z",
+        "requested": {
+          "amount": "25.00",
+          "currency": "USD",
+          "description": "another bag of coffee beans"
+        },
+        "reasonCode": "OVER_TOTAL_CAP",
+        "reasonDetail": "cumulative cap 60.00 would be exceeded (already spent 55.00, remaining 5.00)",
+        "chainTip": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a",
+        "journalLength": 6
+      },
+      "full": {
+        "denial": {
+          "denialId": "deny-accdcb1f2a16c400",
+          "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "logicalKey": "demo-3-over-cap",
+          "createdAt": "2026-10-10T09:53:02.085Z",
+          "requested": {
+            "amount": "25.00",
+            "currency": "USD",
+            "description": "another bag of coffee beans"
+          },
+          "reasonCode": "OVER_TOTAL_CAP",
+          "reasonDetail": "cumulative cap 60.00 would be exceeded (already spent 55.00, remaining 5.00)",
+          "chainTip": "bb81e8d9e16a88e3cce51435eb9752900e76a55b85ced14d75da12220884165a",
+          "journalLength": 6
+        },
+        "mandate": {
+          "id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "version": "cb-mandate/v1",
+          "principal": "Sam",
+          "agent": "shopping-agent-1",
+          "purpose": "team snacks this week",
+          "limits": {
+            "currency": "USD",
+            "maxPerTransaction": "30.00",
+            "maxTotalSpend": "60.00",
+            "windowStart": "2026-10-10T09:52:02.070Z",
+            "windowEnd": "2026-10-17T09:53:02.071Z"
+          },
+          "issuedAt": "2026-10-10T09:53:02.071Z"
+        },
+        "mandateSignature": "85h8/L8b0BpnMluzGD36oNLr1cNgW3yuyvpRrI1wnKx04pY8MFwY2ofQ6NPsJYHCuzujzZyPRXU0vPBO7yAJAw==",
+        "mandatePublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "denialSignature": "nx+GbVv58qvD+bWYg0kTvNQ0pySaJ1RckAnDhg2x9BVNGGuZEDODauj8hJOj5rKaYe0xyjc0Cg+lyj7sh9H3AA==",
+        "denialPublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "railsMode": "mock"
+      }
+    },
+    "demo-4-over-tx": {
+      "kind": "denial",
+      "denial": {
+        "denialId": "deny-724410f42ec879cc",
+        "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logicalKey": "demo-4-over-tx",
+        "createdAt": "2026-10-10T09:53:02.088Z",
+        "requested": {
+          "amount": "500.00",
+          "currency": "USD",
+          "description": "flight to Las Vegas"
+        },
+        "reasonCode": "OVER_PER_TRANSACTION",
+        "reasonDetail": "requested 500.00 exceeds per-transaction cap 30.00",
+        "chainTip": "704908eb4117c71f04a8b3f066b81d9755d2402c025bfbd3e72720092082602e",
+        "journalLength": 7
+      },
+      "full": {
+        "denial": {
+          "denialId": "deny-724410f42ec879cc",
+          "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "logicalKey": "demo-4-over-tx",
+          "createdAt": "2026-10-10T09:53:02.088Z",
+          "requested": {
+            "amount": "500.00",
+            "currency": "USD",
+            "description": "flight to Las Vegas"
+          },
+          "reasonCode": "OVER_PER_TRANSACTION",
+          "reasonDetail": "requested 500.00 exceeds per-transaction cap 30.00",
+          "chainTip": "704908eb4117c71f04a8b3f066b81d9755d2402c025bfbd3e72720092082602e",
+          "journalLength": 7
+        },
+        "mandate": {
+          "id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "version": "cb-mandate/v1",
+          "principal": "Sam",
+          "agent": "shopping-agent-1",
+          "purpose": "team snacks this week",
+          "limits": {
+            "currency": "USD",
+            "maxPerTransaction": "30.00",
+            "maxTotalSpend": "60.00",
+            "windowStart": "2026-10-10T09:52:02.070Z",
+            "windowEnd": "2026-10-17T09:53:02.071Z"
+          },
+          "issuedAt": "2026-10-10T09:53:02.071Z"
+        },
+        "mandateSignature": "85h8/L8b0BpnMluzGD36oNLr1cNgW3yuyvpRrI1wnKx04pY8MFwY2ofQ6NPsJYHCuzujzZyPRXU0vPBO7yAJAw==",
+        "mandatePublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "denialSignature": "XEM63bPVNRh8yPXoWhWAMV2pBrRNmpoCzD0r9D91uVCgAc74zW4Kty1wpOmmi+jjeZpghkDRenxluTpLkm4HAA==",
+        "denialPublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "railsMode": "mock"
+      }
+    },
+    "demo-5-after-revoke": {
+      "kind": "denial",
+      "denial": {
+        "denialId": "deny-f294429104cdab7a",
+        "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+        "logicalKey": "demo-5-after-revoke",
+        "createdAt": "2026-10-10T09:53:02.092Z",
+        "requested": {
+          "amount": "5.00",
+          "currency": "USD",
+          "description": "post-revocation attempt"
+        },
+        "reasonCode": "MANDATE_REVOKED",
+        "reasonDetail": "revoked at 2026-10-10T09:53:02.091Z (principal cut the card)",
+        "chainTip": "e6007c2ec4d823287a73dbf7fa2f6234f9c071e35986f1844263218ae790833d",
+        "journalLength": 9
+      },
+      "full": {
+        "denial": {
+          "denialId": "deny-f294429104cdab7a",
+          "mandateId": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "logicalKey": "demo-5-after-revoke",
+          "createdAt": "2026-10-10T09:53:02.092Z",
+          "requested": {
+            "amount": "5.00",
+            "currency": "USD",
+            "description": "post-revocation attempt"
+          },
+          "reasonCode": "MANDATE_REVOKED",
+          "reasonDetail": "revoked at 2026-10-10T09:53:02.091Z (principal cut the card)",
+          "chainTip": "e6007c2ec4d823287a73dbf7fa2f6234f9c071e35986f1844263218ae790833d",
+          "journalLength": 9
+        },
+        "mandate": {
+          "id": "cbmd-a061d425-21e1-447e-88bb-67768d82d4d7",
+          "version": "cb-mandate/v1",
+          "principal": "Sam",
+          "agent": "shopping-agent-1",
+          "purpose": "team snacks this week",
+          "limits": {
+            "currency": "USD",
+            "maxPerTransaction": "30.00",
+            "maxTotalSpend": "60.00",
+            "windowStart": "2026-10-10T09:52:02.070Z",
+            "windowEnd": "2026-10-17T09:53:02.071Z"
+          },
+          "issuedAt": "2026-10-10T09:53:02.071Z"
+        },
+        "mandateSignature": "85h8/L8b0BpnMluzGD36oNLr1cNgW3yuyvpRrI1wnKx04pY8MFwY2ofQ6NPsJYHCuzujzZyPRXU0vPBO7yAJAw==",
+        "mandatePublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "denialSignature": "EN/hX946ofRF+3w7Gm7N0KDdeDfc3Yaq2sHwSzVtWfVIeGGeYUih68/zhRYC/a/ZKsnaESQhtDYstU4MTqf7Bw==",
+        "denialPublicKey": "MCowBQYDK2VwAyEAtw5T1WqwUBaox/8g+7sB9NijAgFMDCr7PoTacN1XkSw=",
+        "railsMode": "mock"
+      }
+    }
+  }
+}

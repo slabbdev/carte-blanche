@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Carte Blanche — your AI agent shops, you keep the keys</title>
+<meta name="description" content="Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with PayPal. An interactive explainer with real signed artifacts." />
+<meta property="og:title" content="Carte Blanche — your AI agent shops, you keep the keys" />
+<meta property="og:description" content="An AI agent with a payment tool is a blank check. Carte Blanche is the signed mandate layer: it blocks overspending, seals every event, and hands you verifiable receipts — and verifiable refusals." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='8' y='22' width='84' height='56' rx='10' fill='white'/><rect x='8' y='34' width='84' height='10' fill='%23101823'/></svg>" />
+<style>
+  :root {
+    --bg: #0a0f16; --panel: #101823; --panel2: #0c1420; --border: #1e2a3a; --text: #e6edf3;
+    --muted: #8b98a9; --green: #34d399; --red: #f87171; --blue: #60a5fa; --amber: #fbbf24;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px 100px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.9em; background: #0b121c; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+  pre { background: #0b121c; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; overflow: auto; font-family: var(--mono); }
+  pre code { border: 0; background: none; padding: 0; }
+
+  /* top bar */
+  .topbar { position: sticky; top: 0; z-index: 10; background: rgba(10,15,22,0.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  .topbar .inner { max-width: 900px; margin: 0 auto; padding: 10px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .wordmark { font-weight: 800; letter-spacing: 0.5px; font-size: 14px; color: var(--text); }
+  .wordmark .card { background: #fff; color: #0a0f16; border-radius: 5px; padding: 0 7px; margin-right: 2px; }
+  .topbar nav { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+  .topbar nav a { color: var(--muted); font-size: 13px; }
+  .topbar nav a:hover { color: var(--text); text-decoration: none; }
+
+  /* hero */
+  header.hero { padding: 64px 0 40px; }
+  h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.15; margin: 0 0 14px; }
+  h1 .card { display: inline-block; background: #fff; color: #0a0f16; border-radius: 10px; padding: 0 14px; }
+  .hero p.sub { font-size: 19px; color: var(--muted); max-width: 640px; margin: 0 0 26px; }
+  .hero p.sub b { color: var(--text); }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; background: #2563eb; color: #fff !important; font-weight: 600; border-radius: 9px; padding: 10px 18px; font-size: 15px; text-decoration: none !important; }
+  .btn:hover { background: #1d4ed8; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted) !important; font-weight: 500; }
+  .btn.ghost:hover { color: var(--text) !important; border-color: #3b4a5f; }
+  .replay { margin-top: 22px; font-size: 12.5px; color: var(--muted); border: 1px dashed var(--border); border-radius: 9px; padding: 10px 14px; max-width: 640px; }
+  .replay b { color: var(--amber); }
+
+  /* acts */
+  section.act { padding: 44px 0 10px; }
+  .act-kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  h2 { font-size: 26px; margin: 6px 0 8px; }
+  .act-lede { color: var(--muted); max-width: 680px; margin: 0 0 22px; }
+
+  /* comic */
+  .comic { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .frame { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .frame .emoji { font-size: 34px; }
+  .frame h3 { font-size: 15px; margin: 10px 0 6px; }
+  .frame p { font-size: 13.5px; color: var(--muted); margin: 0; }
+  .frame p b { color: var(--text); }
+  .quote { margin-top: 18px; border-left: 3px solid var(--amber); padding: 4px 0 4px 16px; color: var(--muted); font-size: 14px; }
+  .quote .who { font-family: var(--mono); font-size: 12px; }
+
+  /* mandate card */
+  .mandate-card { background: #fff; color: #111; border-radius: 16px; padding: 22px 24px; max-width: 480px; box-shadow: 0 12px 40px rgba(0,0,0,0.45); }
+  .mandate-card .mc-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed #d1d5db; padding-bottom: 10px; margin-bottom: 12px; }
+  .mandate-card .mc-head b { font-size: 15px; letter-spacing: 1px; }
+  .mandate-card dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 16px; font-size: 14px; margin: 0; }
+  .mandate-card dt { color: #6b7280; }
+  .mandate-card dd { margin: 0; font-family: var(--mono); font-size: 13px; text-align: right; }
+  .mandate-card .mc-note { font-size: 11.5px; color: #6b7280; margin-top: 12px; }
+  button.sign { background: #059669; color: #fff; border: 0; font-weight: 700; font-size: 15px; border-radius: 10px; padding: 11px 20px; cursor: pointer; margin-top: 18px; }
+  button.sign:hover { background: #047857; }
+  button.sign:disabled { background: #334155; cursor: default; }
+
+  /* purchase buttons + outcomes */
+  .shop { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+  .tryline { display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; flex-wrap: wrap; }
+  .tryline .n { font-family: var(--mono); color: var(--muted); font-size: 13px; width: 20px; }
+  .tryline .what { flex: 1; min-width: 200px; font-size: 14.5px; }
+  .tryline .what .amt { font-family: var(--mono); font-size: 13px; color: var(--muted); display: block; }
+  button.try { background: #1e293b; color: var(--text); border: 1px solid #334155; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13.5px; font-weight: 600; }
+  button.try:hover { border-color: #475569; background: #263449; }
+  .artifact { margin: 14px 0 4px 32px; max-width: 640px; border-radius: 12px; padding: 16px 18px; display: none; }
+  .artifact.show { display: block; }
+  .artifact.receipt { border: 1px solid rgba(52,211,153,0.45); background: rgba(52,211,153,0.06); }
+  .artifact.denial { border: 1px solid rgba(248,113,113,0.45); background: rgba(248,113,113,0.06); }
+  .artifact .head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .artifact .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; color: var(--muted); }
+  .pill { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 11px; letter-spacing: 0.6px; }
+  .pill.ok { background: rgba(52,211,153,0.14); color: var(--green); }
+  .pill.no { background: rgba(248,113,113,0.14); color: var(--red); }
+  .artifact .why { font-size: 13.5px; margin: 4px 0 8px; }
+  .artifact .actions { display: flex; gap: 14px; font-size: 12.5px; margin-top: 8px; }
+  .artifact .actions a, .artifact .actions button.linkish { background: none; border: 0; padding: 0; color: var(--blue); cursor: pointer; font-size: 12.5px; }
+  .artifact .sig { font-family: var(--mono); font-size: 10.5px; color: var(--muted); word-break: break-all; margin-top: 8px; }
+
+  /* verify */
+  .verifybox { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+  .verdict { border-radius: 10px; padding: 14px 18px; font-weight: 700; font-size: 16px; margin-bottom: 14px; display: none; }
+  .verdict.ok { display: block; border: 1px solid rgba(52,211,153,0.5); background: rgba(52,211,153,0.07); color: var(--green); }
+  .verdict.bad { display: block; border: 1px solid rgba(248,113,113,0.5); background: rgba(248,113,113,0.07); color: var(--red); }
+  .checkrow { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13.5px; align-items: baseline; }
+  .checkrow .mark { font-weight: 800; width: 16px; text-align: center; }
+  .checkrow .mark.ok { color: var(--green); } .checkrow .mark.bad { color: var(--red); } .checkrow .mark.warn { color: var(--amber); }
+  .checkrow .detail { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
+  .vnote { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  button.rerun { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12.5px; }
+  button.rerun:hover { color: var(--text); }
+
+  /* run it */
+  .runit .step { margin-bottom: 18px; }
+  .runit .step h3 { font-size: 14.5px; margin: 0 0 6px; }
+  .runit .step p { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+
+  footer { margin-top: 60px; border-top: 1px solid var(--border); padding-top: 22px; font-size: 13px; color: var(--muted); }
+  footer .links { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  .reveal { opacity: 0; transform: translateY(10px); transition: opacity 0.4s ease, transform 0.4s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (max-width: 640px) { .artifact { margin-left: 0; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="wordmark"><span class="card">CARTE</span>BLANCHE</span>
+    <nav>
+      <a href="#problem">The problem</a>
+      <a href="#mandate">Mandate</a>
+      <a href="#agent">The agent shops</a>
+      <a href="#verify">Verify</a>
+      <a href="#run">Run it</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header class="hero">
+  <h1><span class="card">Your AI agent shops.</span><br />You keep the keys.</h1>
+  <p class="sub">
+    Give an AI agent a payment tool and you've signed it a <b>blank check</b>.
+    Carte Blanche is the missing layer in between: <b>signed spending mandates</b> the agent
+    cannot override, a <b>sealed journal</b> of everything it tried, and <b>verifiable receipts</b> —
+    and verifiable refusals — for every attempt. Built on PayPal rails.
+  </p>
+  <div class="cta">
+    <a class="btn" href="https://github.com/slabbdev/carte-blanche">GitHub →</a>
+    <a class="btn ghost" href="#run">Run the real thing in 30s</a>
+  </div>
+  <p class="replay">
+    <b>Honesty note.</b> Everything on this page replays a real recorded run of <code>carte-blanche v0.1.0</code>
+    (2026-10-10, dev rails — ids are prefixed <code>MOCK-</code>). The Ed25519 signatures and the journal below are
+    genuine artifacts, not mockups: press the buttons, then run it yourself and compare.
+  </p>
+</header>
+
+<section class="act reveal" id="problem">
+  <div class="act-kicker">Act 0 · The problem</div>
+  <h2>An agent with a wallet answers to nobody</h2>
+  <p class="act-lede">
+    Agentic commerce is being built fast — OpenAI & Stripe's ACP, Google's AP2, Coinbase's x402,
+    official agent toolkits. Here is what none of them ship:
+  </p>
+  <div class="comic">
+    <div class="frame">
+      <div class="emoji">🤖💳</div>
+      <h3>The agent CAN pay</h3>
+      <p>Today's toolkits expose <b>capture-an-order</b> as a plain function call. If the model decides to spend, money moves. The official PayPal agent toolkit even sets its idempotence key at client level — a framework retry can double-charge (their issue&nbsp;#98).</p>
+    </div>
+    <div class="frame">
+      <div class="emoji">🧾🚫</div>
+      <h3>No mandate, no receipt</h3>
+      <p>There is no way to say <b>“$60 max this week, groceries only”</b> in a form an agent can be held to. And when the agent buys, no proof of <em>what authorized it</em> survives the transaction.</p>
+    </div>
+    <div class="frame">
+      <div class="emoji">⚖️❓</div>
+      <h3>Disputes? Nobody's answer</h3>
+      <p>When a chargeback hits an agent-initiated purchase, there is no evidence standard. x402 skips disputes by design; ACP doesn't define them; AP2 is a spec, not a product.</p>
+    </div>
+  </div>
+  <div class="quote">
+    “Audit trail: <b>Nobody provides one.</b>” — Hacker News, on machine payments
+    <div class="who">the exact gap Carte Blanche occupies</div>
+  </div>
+</section>
+
+<section class="act reveal" id="mandate">
+  <div class="act-kicker">Act 1 · The mandate</div>
+  <h2>A mandate is a signed contract, not a suggestion</h2>
+  <p class="act-lede">
+    The principal (you) grants the agent a mandate: hard caps, a payee allowlist, a time window.
+    It's signed with Ed25519 over canonical JSON, stored immutably — and <b>revocation is the only exit</b>.
+    Here is the one used in this replay:
+  </p>
+  <div class="mandate-card">
+    <div class="mc-head"><b>CARTE BLANCHE</b><span style="font-family:var(--mono);font-size:11px;color:#6b7280">mandate</span></div>
+    <dl id="mc-fields">
+      <dt>Holder</dt><dd id="mc-agent">…</dd>
+      <dt>Principal</dt><dd id="mc-principal">…</dd>
+      <dt>Purpose</dt><dd id="mc-purpose">…</dd>
+      <dt>Max / transaction</dt><dd id="mc-maxtx">…</dd>
+      <dt>Max total</dt><dd id="mc-maxtotal">…</dd>
+      <dt>Valid</dt><dd id="mc-window">…</dd>
+    </dl>
+    <div class="mc-note">Immutable once signed · revocable instantly · every check journalled</div>
+  </div>
+  <div style="margin-top:6px">
+    <button class="sign" id="signBtn">🔒 Sign mandate (Ed25519)</button>
+    <div class="artifact mandate" id="mandateArtifact">
+      <div class="head"><span class="pill ok">SIGNED</span><span class="mono" id="mc-id"></span></div>
+      <div class="why" style="color:var(--text)">This exact JSON, this exact signature — immutable from now on.</div>
+      <div class="sig" id="mc-sig"></div>
+      <div class="actions"><button class="linkish" onclick="copyJson(ARTIFACTS.mandate)">copy signed mandate JSON</button></div>
+    </div>
+  </div>
+</section>
+
+<section class="act reveal" id="agent">
+  <div class="act-kicker">Act 2 · The agent shops</div>
+  <h2>Every attempt gets an answer. Both kinds are signed.</h2>
+  <p class="act-lede">
+    Try the purchases the demo agent tried. Allowed ones come back with a receipt;
+    refused ones come back with a <b>signed proof of refusal</b> naming the exact limit that blocked them.
+    (They run in the recorded order — the cumulative cap needs purchases ① and ② to have happened.)
+  </p>
+  <div class="shop" id="shop"></div>
+</section>
+
+<section class="act reveal" id="verify">
+  <div class="act-kicker">Act 3 · Verify anything</div>
+  <h2>Your browser just became the auditor</h2>
+  <p class="act-lede">
+    Below, <b>your own machine</b> re-hashes all <span class="evcount">…</span> journal events with WebCrypto SHA-256,
+    re-links the chain, and checks every Ed25519 signature — the mandate's, each receipt's, each refusal's.
+    No server is asked to vouch for anything.
+  </p>
+  <div class="verifybox">
+    <div class="verdict" id="verdict"></div>
+    <div id="checks"><span class="vnote">running…</span></div>
+    <div class="vnote" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="vnote">Replayed from <code>docs/assets/artifacts.json</code> — recorded by <code>scripts/capture-demo.ts</code>.</span>
+      <button class="rerun" onclick="runVerification(true)">↻ re-run in my browser</button>
+    </div>
+  </div>
+</section>
+
+<section class="act reveal runit" id="run">
+  <div class="act-kicker">Act 4 · Run the real thing</div>
+  <h2>Thirty seconds, zero credentials</h2>
+  <div class="step">
+    <p>The scripted scenario — mandate, purchases, refusals, verification — with a dev simulator (ids clearly prefixed <code>MOCK-</code>):</p>
+    <pre><code>git clone https://github.com/slabbdev/carte-blanche &amp;&amp; cd carte-blanche
+npm install &amp;&amp; npm run build &amp;&amp; npm run demo</code></pre>
+  </div>
+  <div class="step">
+    <p>What it prints (from an actual run):</p>
+    <pre><code>mandate granted: $60 total / $30 per transaction / 7 days (cbmd-…)
+purchase 1 OK   -&gt; rcpt-9605aca151997623 (MOCK-0001)
+purchase 2 OK   -&gt; rcpt-b29d9b2d0c2fd9b5 (MOCK-0002)
+purchase 3 REFUSED -&gt; deny-6096fbb13112cb08 [OVER_TOTAL_CAP]
+   cumulative cap 60.00 would be exceeded (already spent 55.00, remaining 5.00)
+verification: receipt=true refusal=true chain(7 events)=true
+retry-safety: re-submitting purchase 1 returns the same receipt id (no second PayPal call)</code></pre>
+  </div>
+  <div class="step">
+    <p>Point it at the <b>real PayPal sandbox</b> (Orders v2 REST) with your developer credentials:</p>
+    <pre><code>PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=… PAYPAL_CLIENT_SECRET=… npm start</code></pre>
+  </div>
+  <div class="step">
+    <p>Or let an actual LLM loose on it — its only payment tools are <code>mandate_status</code>, <code>purchase</code>, <code>my_receipts</code>:</p>
+    <pre><code>npm start &amp;            # console on :8790
+OPENAI_API_KEY=… npm run demo:llm -- &lt;mandate_id&gt; "Buy a keyboard for under $60"</code></pre>
+  </div>
+</section>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/slabbdev/carte-blanche">GitHub</a>
+    <a href="https://paypalaihackathon.devpost.com/">PayPal AI Hackathon</a>
+    <a href="https://github.com/slabbdev/carte-blanche/blob/main/PROGRESSION.md">Build log</a>
+  </div>
+  <div>
+    Honest v0 limits, stated plainly: this replay runs on dev rails (<code>MOCK-</code> ids); the server currently signs
+    mandates as custodial principal; portable third-party verification (Merkle inclusion proofs + RFC 3161 timestamping)
+    is the next milestone. Nothing here pretends otherwise.
+    <br /><br />MIT licensed · built in the open, October 2026.
+  </div>
+</footer>
+
+</div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// --- canonical JSON: the exact algorithm the server signs with ---
+function canonicalJson(v) {
+  if (v === null || v === undefined) return "null";
+  const t = typeof v;
+  if (t === "string" || t === "number" || t === "boolean") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(canonicalJson).join(",") + "]";
+  if (t === "object") {
+    const e = Object.entries(v).filter(([, x]) => x !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return "{" + e.map(([k, x]) => JSON.stringify(k) + ":" + canonicalJson(x)).join(",") + "}";
+  }
+  throw new Error("unsupported");
+}
+const te = new TextEncoder();
+async function sha256Hex(s) {
+  const d = await crypto.subtle.digest("SHA-256", te.encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+async function verifyEd25519(pubB64, sigB64, payload) {
+  try {
+    const key = await crypto.subtle.importKey("spki", b64ToBytes(pubB64), { name: "Ed25519" }, false, ["verify"]);
+    return await crypto.subtle.verify({ name: "Ed25519" }, key, b64ToBytes(sigB64), te.encode(canonicalJson(payload)));
+  } catch {
+    return null; // Ed25519 unavailable in this browser
+  }
+}
+const fingerprint = async (pubB64) => (await sha256Hex(pubB64)).slice(0, 12);
+
+// --- load the recorded run ---
+export let ARTIFACTS;
+const res = await fetch("./assets/artifacts.json");
+ARTIFACTS = await res.json();
+window.ARTIFACTS = ARTIFACTS;
+window.copyJson = (o) => navigator.clipboard.writeText(JSON.stringify(o, null, 2));
+
+// --- Act 1: mandate card ---
+{
+  const m = ARTIFACTS.mandate.mandate;
+  $("#mc-agent").textContent = m.agent;
+  $("#mc-principal").textContent = m.principal;
+  $("#mc-purpose").textContent = m.purpose;
+  $("#mc-maxtx").textContent = `${m.limits.maxPerTransaction} ${m.limits.currency}`;
+  $("#mc-maxtotal").textContent = `${m.limits.maxTotalSpend} ${m.limits.currency}`;
+  $("#mc-window").textContent = `${m.limits.windowStart.slice(0, 10)} → ${m.limits.windowEnd.slice(0, 10)}`;
+  $("#signBtn").onclick = async () => {
+    $("#mandateArtifact").classList.add("show");
+    $("#mc-id").textContent = m.id;
+    $("#mc-sig").textContent = `signature ${(await fingerprint(ARTIFACTS.mandate.signature))}… : ${ARTIFACTS.mandate.signature.slice(0, 52)}…`;
+    $("#signBtn").textContent = "✓ Signed — immutable";
+    $("#signBtn").disabled = true;
+  };
+}
+
+// --- Act 2: the shopping story ---
+const SCENARIOS = [
+  { key: "demo-1-coffee", n: "①", what: "Coffee beans for the team", amt: "$25.00", cta: "Buy" },
+  { key: "demo-2-mat", n: "②", what: "Standing desk mat", amt: "$30.00", cta: "Buy" },
+  { key: "demo-3-over-cap", n: "③", what: "Another bag of coffee beans — total would reach $80", amt: "$25.00 · would exceed the $60 cap", cta: "Try it" },
+  { key: "demo-4-over-tx", n: "④", what: "A flight to Las Vegas", amt: "$500.00 · 16× the per-transaction cap", cta: "Try it" },
+  { key: "demo-5-after-revoke", n: "⑤", what: "You revoke the mandate — the agent tries a $5 purchase anyway", amt: "$5.00 · after revocation", cta: "Revoke & retry" },
+];
+$("#shop").innerHTML = SCENARIOS.map((s) => `
+  <div class="tryline">
+    <span class="n">${s.n}</span>
+    <span class="what">${esc(s.what)}<span class="amt">${esc(s.amt)}</span></span>
+    <button class="try" data-key="${s.key}">${s.cta}</button>
+  </div>
+  <div class="artifact" id="art-${s.key}"></div>`).join("");
+
+function idOf(o) { return o.kind === "receipt" ? o.receipt.receiptId : o.denial.denialId; }
+
+function artifactHtml(key, o, fp) {
+  const common = `
+    <div class="actions">
+      <button class="linkish" onclick="copyJson(ARTIFACTS.outcomes['${key}'].full)">copy full evidence JSON</button>
+      <a href="#verify">verified below ↓</a>
+    </div>
+    <div class="sig">server signature ${fp}… : ${(o.kind === "receipt" ? o.full.receiptSignature : o.full.denialSignature).slice(0, 52)}…</div>`;
+  if (o.kind === "receipt") {
+    return `
+      <div class="head"><span class="pill ok">RECEIPT</span><span class="mono">${esc(o.receipt.receiptId)}</span></div>
+      <div class="why" style="color:var(--text)">Paid <b>${esc(o.receipt.amount)} ${esc(o.receipt.currency)}</b> — “${esc(o.receipt.description)}”.</div>
+      <div class="mono">order ${esc(o.receipt.orderId)} · capture ${esc(o.receipt.captureId)} · ${o.full.events.length} journalled events (intent → order → capture)</div>
+      ${common}`;
+  }
+  return `
+    <div class="head"><span class="pill no">REFUSED</span><span class="mono">${esc(o.denial.denialId)}</span></div>
+    <div class="why" style="color:var(--text)"><b>${esc(o.denial.requested.amount)} ${esc(o.denial.requested.currency)}</b> — “${esc(o.denial.requested.description)}”</div>
+    <div class="why"><b style="color:var(--red)">[${esc(o.denial.reasonCode)}]</b> ${esc(o.denial.reasonDetail)} · nothing moved, proof sealed.</div>
+    ${common}`;
+}
+
+$$("button.try").forEach((btn) => {
+  btn.onclick = async () => {
+    const key = btn.dataset.key;
+    const o = ARTIFACTS.outcomes[key];
+    const box = $(`#art-${key}`);
+    if (!box.classList.contains("show")) {
+      const sig = o.kind === "receipt" ? o.full.receiptSignature : o.full.denialSignature;
+      const fp = (await sha256Hex(sig)).slice(0, 8);
+      box.innerHTML = artifactHtml(key, o, fp);
+    }
+    box.classList.add("show");
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+});
+
+// --- Act 3: verification in the visitor's browser ---
+$(".evcount").textContent = ARTIFACTS.events.length;
+let lastReport = null;
+
+async function runVerification(manual = false) {
+  const checks = [];
+  const A = ARTIFACTS;
+
+  const genesis = await sha256Hex("carte-blanche/journal/genesis/v1");
+  checks.push({ ok: A.events[0].prevHash === genesis, label: "Journal anchors to its genesis", detail: "sha256 of the creation string" });
+
+  let brokenAt = null;
+  for (let i = 0; i < A.events.length; i++) {
+    const e = A.events[i];
+    const h = await sha256Hex(canonicalJson({ seq: e.seq, ts: e.ts, type: e.type, data: e.data, prevHash: e.prevHash }));
+    if (h !== e.hash || (i > 0 && e.prevHash !== A.events[i - 1].hash)) { brokenAt = e.seq; break; }
+  }
+  checks.push({
+    ok: brokenAt === null,
+    label: `All ${A.events.length} journal events re-hash to their SHA-256, chain links intact`,
+    detail: brokenAt === null ? `tip ${A.meta.chainTip.slice(0, 14)}…` : `BROKE at seq ${brokenAt}`,
+  });
+
+  const mOk = await verifyEd25519(A.mandate.publicKey, A.mandate.signature, A.mandate.mandate);
+  checks.push({ ok: mOk === true, warn: mOk === null, label: "Mandate Ed25519 signature", detail: mOk === null ? "Ed25519 unavailable here — verify with `npm run demo`" : `signed by ${await fingerprint(A.mandate.publicKey)}` });
+
+  for (const [key, o] of Object.entries(A.outcomes)) {
+    const isR = o.kind === "receipt";
+    const s = isR
+      ? await verifyEd25519(o.full.receiptPublicKey, o.full.receiptSignature, o.full.receipt)
+      : await verifyEd25519(o.full.denialPublicKey, o.full.denialSignature, o.full.denial);
+    checks.push({
+      ok: s === true, warn: s === null,
+      label: `${isR ? "Receipt" : "Refusal"} ${idOf(o)}`,
+      detail: s === null ? "Ed25519 unavailable here" : s ? `${isR ? "paid" : "blocked"} · signature valid` : "INVALID SIGNATURE",
+    });
+  }
+
+  const solid = checks.filter((c) => c.ok).length;
+  const usable = checks.filter((c) => !c.warn).length;
+  const verdict = $("#verdict");
+  verdict.className = "verdict " + (brokenAt === null && usable === checks.length ? "ok" : "bad");
+  verdict.textContent = brokenAt === null && usable === checks.length
+    ? `VERIFIED — ${solid}/${checks.length} checks passed, computed in your browser`
+    : `VERIFICATION PROBLEM — ${solid}/${checks.length} checks passed`;
+
+  $("#checks").innerHTML = checks.map((c) => `
+    <div class="checkrow">
+      <span class="mark ${c.warn ? "warn" : c.ok ? "ok" : "bad"}">${c.warn ? "•" : c.ok ? "✓" : "✗"}</span>
+      <span>${esc(c.label)}</span>
+      ${c.detail ? `<span class="detail">${esc(c.detail)}</span>` : ""}
+    </div>`).join("");
+
+  if (manual) $("#checks").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return lastReport = checks;
+}
+window.runVerification = runVerification;
+
+// auto-run when Act 3 first scrolls into view
+const vObs = new IntersectionObserver((entries) => {
+  if (entries.some((e) => e.isIntersecting)) {
+    vObs.disconnect();
+    runVerification();
+  }
+}, { rootMargin: "-10% 0px" });
+vObs.observe($("#verify"));
+
+// reveal-on-scroll for acts
+const rObs = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); rObs.unobserve(e.target); }
+}, { threshold: 0.08 });
+$$(".reveal").forEach((el) => rObs.observe(el));
+</script>
+</body>
+</html>

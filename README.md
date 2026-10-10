@@ -4,6 +4,10 @@
 
 Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with **PayPal**.
 
+**▶ Interactive explainer with real signed artifacts: https://slabbdev.github.io/carte-blanche/**
+(it replays a recorded run — press the buttons, watch refusals get signed, then verify everything
+in your own browser with WebCrypto. Recorded by `scripts/capture-demo.ts`, served from `docs/`.)
+
 An AI agent with a payment tool is a walking blank check — today's toolkits will capture an order
 because the model decided to. Carte Blanche is the layer that sits between the agent and PayPal:
 
