@@ -84,7 +84,7 @@ export class PayPalClient {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "User-Agent": "carte-blanche/0.1.0",
+      "User-Agent": "carte-blanche/0.2.0",
     };
     if (requestId !== undefined) headers["PayPal-Request-Id"] = requestId;
     const res = await this.fetchImpl(`${HOSTS[this.cfg.env]}${path}`, {
@@ -126,6 +126,44 @@ export class PayPalClient {
 
   async listDisputes(): Promise<PayPalResponse<{ links?: unknown[]; items?: Array<{ dispute_id: string; status: string; reason: string }> }>> {
     return this.request("GET", "/v1/customer/disputes", undefined, undefined);
+  }
+
+  async getDispute(disputeId: string): Promise<PayPalResponse<Record<string, unknown>>> {
+    return this.request("GET", `/v1/customer/disputes/${encodeURIComponent(disputeId)}`, undefined, undefined);
+  }
+
+  /**
+   * Sandbox helper: creates a SAMPLE dispute so the dispute flow can be
+   * exercised without a real buyer complaint. Documented as sandbox-only
+   * ("mode": "SAMPLE_DISPUTE"); on live this endpoint is not for sellers.
+   */
+  async createSampleDispute(args: {
+    transactionId: string;
+    reason: string;
+    note?: string;
+  }): Promise<PayPalResponse<Record<string, unknown>>> {
+    return this.request("POST", "/v1/customer/disputes", {
+      mode: "SAMPLE_DISPUTE",
+      reason: args.reason,
+      disputed_transaction: {
+        transaction_id: args.transactionId,
+        note: args.note ?? "carte-blanche sample dispute (sandbox)",
+      },
+    }, undefined);
+  }
+
+  /**
+   * Merchant response to a dispute: evidence submission. `evidence` follows
+   * the provide-evidence schema (evidence_type + notes + optional
+   * return_shipping_info / evidence_info). Files are NOT uploaded here — the
+   * documents download scope requires an account manager; packs go as notes
+   * plus structured JSON.
+   */
+  async provideEvidence(disputeId: string, evidence: Array<Record<string, unknown>>, notes?: string): Promise<PayPalResponse<Record<string, unknown>>> {
+    return this.request("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/provide-evidence`, {
+      evidence,
+      ...(notes ? { notes } : {}),
+    }, undefined);
   }
 }
 

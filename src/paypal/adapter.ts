@@ -72,14 +72,21 @@ export class LiveRails implements PaymentRails {
   }
 }
 
-export function makeRails(env: Record<string, string | undefined>): PaymentRails {
+/** Builds the real PayPal client from env, or undefined in mock mode. */
+export function makePayPalClient(env: Record<string, string | undefined>): PayPalClient | undefined {
   const mode = (env.PAYPAL_MODE ?? "mock") as RailsMode;
-  if (mode === "mock") return new MockRails();
+  if (mode === "mock") return undefined;
   const clientId = env.PAYPAL_CLIENT_ID;
   const clientSecret = env.PAYPAL_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     throw new Error("PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are required when PAYPAL_MODE is not 'mock'");
   }
   const paypalEnv: PayPalEnv = env.PAYPAL_ENV === "live" ? "live" : "sandbox";
-  return new LiveRails(new PayPalClient({ env: paypalEnv, clientId, clientSecret }));
+  return new PayPalClient({ env: paypalEnv, clientId, clientSecret });
+}
+
+export function makeRails(env: Record<string, string | undefined>): PaymentRails {
+  const mode = (env.PAYPAL_MODE ?? "mock") as RailsMode;
+  if (mode === "mock") return new MockRails();
+  return new LiveRails(makePayPalClient(env)!);
 }

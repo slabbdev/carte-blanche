@@ -6,24 +6,34 @@ import { Journal } from "./journal/journal.js";
 import { MandateStore } from "./mandate/store.js";
 import { newMandateId, validateMandate, type Mandate } from "./mandate/mandate.js";
 import { signMandate } from "./mandate/signing.js";
-import { makeRails } from "./paypal/adapter.js";
+import { makeRails, makePayPalClient } from "./paypal/adapter.js";
 import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
+import { DisputeService } from "./disputes/service.js";
+import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 
 const PORT = Number(process.env.PORT ?? 8790);
 const KEYS_DIR = process.env.KEYS_DIR ?? ".keys";
 const STATE_DIR = process.env.STATE_DIR ?? ".state";
 
 const webRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "web");
+const repoRoot = path.join(webRoot, "..", "..");
 const keys = loadOrCreateKeys(KEYS_DIR);
 const journal = new Journal(path.join(STATE_DIR, "journal.jsonl"), keys.journal);
 const store = new MandateStore(path.join(STATE_DIR, "mandates.json"));
 const rails = makeRails(process.env);
 const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR);
+const disputes = new DisputeService({
+  railsMode: rails.mode,
+  client: makePayPalClient(process.env),
+  enforcer,
+  journal,
+});
 
 const app = express();
 app.use(express.json());
 app.use(express.static(webRoot));
+app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-community", "dist")));
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, rails: rails.mode, journalLength: journal.length, uptimeSec: Math.round(process.uptime()) });
@@ -182,6 +192,63 @@ app.get("/api/journal/verify", (_req, res) => {
 app.get("/api/journal/events", (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
   res.json({ events: journal.recent(limit) });
+});
+
+// ---------------------------------------------------------------------------
+// Merchant dispute cockpit.
+// ---------------------------------------------------------------------------
+
+app.get("/dashboard", (_req, res) => {
+  res.sendFile(path.join(webRoot, "dashboard.html"));
+});
+
+app.get("/api/disputes", async (_req, res) => {
+  try {
+    res.json({ source: disputes.source, disputes: await disputes.list() });
+  } catch (e) {
+    res.status(502).json({ error: `disputes unavailable: ${(e as Error).message}` });
+  }
+});
+
+app.get("/api/disputes/:id", async (req, res) => {
+  const d = await disputes.get(req.params.id).catch(() => undefined);
+  if (!d) return res.status(404).json({ error: "dispute not found" });
+  res.json(d);
+});
+
+app.get("/api/disputes/:id/evidence-pack", async (req, res) => {
+  const d = await disputes.get(req.params.id).catch(() => undefined);
+  if (!d) return res.status(404).json({ error: "dispute not found" });
+  const pack = buildEvidencePack(d, { enforcer, journal, store });
+  res.json({ pack, markdown: toMarkdown(pack) });
+});
+
+app.post("/api/disputes/:id/submit-evidence", async (req, res) => {
+  const d = await disputes.get(req.params.id).catch(() => undefined);
+  if (!d) return res.status(404).json({ error: "dispute not found" });
+  const pack = buildEvidencePack(d, { enforcer, journal, store });
+  const result = await disputes.submitEvidence(d.disputeId, toProvideEvidenceEntries(pack), toMarkdown(pack));
+  journal.append("evidence_submitted", {
+    dispute_id: d.disputeId,
+    pack_id: pack.packId,
+    ok: result.ok,
+    detail: result.detail.slice(0, 200),
+  });
+  res.json(result);
+});
+
+app.post("/api/disputes/seed-sample", async (req, res) => {
+  const body = (req.body ?? {}) as { transaction_id?: string; reason?: string };
+  const firstReceipt = enforcer.listReceipts()[0];
+  const transactionId = String(body.transaction_id ?? firstReceipt?.orderId ?? "");
+  if (!transactionId) {
+    return res.status(400).json({ error: "no transaction id (make a purchase first or pass transaction_id)" });
+  }
+  const result = await disputes.createSample({
+    transactionId,
+    reason: String(body.reason ?? "ITEM_NOT_RECEIVED"),
+  });
+  res.json(result);
 });
 
 function formatForApi(minor: bigint, currency: string): string {

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dispute cockpit — Carte Blanche</title>
+<script src="/vendor/ag-grid-community.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0f16; --panel: #101823; --border: #1e2a3a; --text: #e6edf3;
+    --muted: #8b98a9; --green: #34d399; --red: #f87171; --amber: #fbbf24; --blue: #60a5fa;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
+  a { color: var(--blue); text-decoration: none; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+  h1 { font-size: 22px; margin: 0; }
+  h1 .card { display: inline-block; background: #fff; color: #0a0f16; border-radius: 6px; padding: 1px 9px; font-weight: 800; }
+  .back { font-size: 13px; color: var(--muted); }
+  .statusline { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 10px; letter-spacing: 0.5px; }
+  .pill.mock { background: rgba(139,152,169,.15); color: var(--muted); }
+  .pill.paypal { background: rgba(96,165,250,.14); color: var(--blue); }
+  .pill.open { background: rgba(251,191,36,.12); color: var(--amber); }
+  .pill.review { background: rgba(96,165,250,.14); color: var(--blue); }
+  .pill.dead { background: rgba(248,113,113,.14); color: var(--red); }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  button { background: #2563eb; border: 0; color: #fff; font-weight: 600; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13.5px; }
+  button:hover { background: #1d4ed8; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  button.ghost:hover { color: var(--text); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #grid { height: 340px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+  .drawer { display: none; margin-top: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .drawer.show { display: block; }
+  .drawer h2 { font-size: 15px; margin: 0 0 10px; }
+  .kv { display: grid; grid-template-columns: 180px 1fr; gap: 4px 14px; font-size: 13.5px; margin-bottom: 14px; }
+  .kv .k { color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .tabs { display: flex; gap: 6px; margin: 12px 0 8px; }
+  .tabs button { font-size: 12.5px; padding: 5px 12px; }
+  .tabs button.active { background: #1e293b; }
+  pre.pack { background: #0b121c; border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 11.5px; overflow: auto; max-height: 420px; white-space: pre-wrap; font-family: var(--mono); }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .empty { color: var(--muted); font-style: italic; font-size: 14px; padding: 20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="card">CARTE</span> BLANCHE · dispute cockpit</h1>
+    <a class="back" href="/">← console</a>
+    <span id="sourcePill" style="margin-left:auto"></span>
+  </header>
+  <p class="statusline" id="statusline">loading disputes…</p>
+
+  <div class="toolbar">
+    <button class="ghost" id="refresh">↻ refresh</button>
+    <button id="seed" style="display:none">Seed a SAMPLE dispute (sandbox)</button>
+    <span class="hint" id="toolhint"></span>
+  </div>
+
+  <div id="grid"></div>
+  <div class="empty" id="empty" style="display:none">No disputes on file. Make a purchase in the console first (mock mode seeds rows from your receipts).</div>
+
+  <div class="drawer" id="drawer">
+    <h2 id="d-title">—</h2>
+    <div class="kv" id="d-kv"></div>
+    <div class="tabs">
+      <button id="tab-md" class="active">evidence pack (markdown)</button>
+      <button id="tab-json">raw JSON</button>
+      <span style="flex:1"></span>
+      <button class="ghost" id="dl-md">⬇ .md</button>
+      <button class="ghost" id="dl-json">⬇ .json</button>
+      <button id="submit">Submit evidence</button>
+    </div>
+    <pre class="pack" id="d-pack">generate the pack to preview it…</pre>
+    <div class="hint" id="d-hint"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let SOURCE = "mock";
+let CURRENT = null;      // selected DisputeView
+let PACK = null;         // {pack, markdown}
+
+function statusPill(status) {
+  const s = String(status || "").toUpperCase();
+  if (s.includes("REVIEW")) return '<span class="pill review">' + esc(status) + "</span>";
+  if (s.includes("OPEN") || s.includes("WAITING")) return '<span class="pill open">' + esc(status) + "</span>";
+  return '<span class="pill mock">' + esc(status) + "</span>";
+}
+
+function daysLeft(respondBy) {
+  if (!respondBy) return null;
+  return Math.ceil((Date.parse(respondBy) - Date.now()) / 864e5);
+}
+
+const gridOptions = {
+  theme: agGrid.themeQuartz.withParams({
+    darkMode: true,
+    accentColor: "#2563eb",
+    borderColor: "#1e2a3a",
+    backgroundColor: "#101823",
+    foregroundColor: "#e6edf3",
+    headerTextColor: "#8b98a9",
+    rowHoverColor: "#16202e",
+  }),
+  defaultColDef: { sortable: true, filter: true, resizable: true, flex: 1, minWidth: 90 },
+  columnDefs: [
+    { field: "respondBy", headerName: "Deadline", pinned: "left", minWidth: 150, flex: 1.2,
+      valueGetter: (p) => { const d = daysLeft(p.data?.respondBy); return d === null ? "—" : d + " day" + (d === 1 ? "" : "s") + " left"; },
+      cellRenderer: (p) => { const d = daysLeft(p.data?.respondBy); if (d === null) return "—";
+        const cls = d <= 3 ? "pill dead" : "pill open"; return '<span class="' + cls + '">' + d + "d left</span>"; },
+      comparator: (a, b) => String(a).localeCompare(String(b)), sort: "asc" },
+    { field: "disputeId", headerName: "Dispute", minWidth: 140,
+      cellRenderer: (p) => '<span class="mono">' + esc(p.value) + "</span>" },
+    { field: "status", headerName: "Status", minWidth: 150, cellRenderer: (p) => statusPill(p.value) },
+    { field: "reason", headerName: "Reason", minWidth: 190 },
+    { headerName: "Amount", minWidth: 110,
+      valueGetter: (p) => (p.data?.amount ?? "—") + " " + (p.data?.currency ?? ""),
+      cellRenderer: (p) => esc(p.value) },
+    { headerName: "Linked receipt", minWidth: 190,
+      valueGetter: (p) => p.data?.linkedReceiptId ?? "—",
+      cellRenderer: (p) => p.value === "—" ? "—" : '<span class="mono">' + esc(p.value) + "</span>" },
+    { field: "source", headerName: "Source", minWidth: 100,
+      cellRenderer: (p) => p.value === "paypal" ? '<span class="pill paypal">PAYPAL</span>' : '<span class="pill mock">MOCK</span>' },
+  ],
+  rowData: [],
+  rowSelection: { mode: "singleRow", checkboxes: false, enableClickSelection: true },
+  onRowClicked: (e) => selectDispute(e.data),
+};
+
+const gridApi = agGrid.createGrid($("grid"), gridOptions);
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
+async function loadDisputes() {
+  $("empty").style.display = "none";
+  $("grid").style.display = "block";
+  const data = await api("/api/disputes");
+  SOURCE = data.source;
+  $("sourcePill").innerHTML = SOURCE === "paypal" ? '<span class="pill paypal">PAYPAL SANDBOX/LIVE</span>' : '<span class="pill mock">MOCK RAILS</span>';
+  $("statusline").textContent = data.disputes.length + " dispute(s) · evidence packs generated from the sealed journal";
+  $("seed").style.display = SOURCE === "paypal" ? "inline-block" : "none";
+  $("toolhint").textContent = SOURCE === "mock"
+    ? "mock rows are seeded from your local receipts — switch PAYPAL_MODE=sandbox for real disputes"
+    : "rows come from the PayPal Disputes API";
+  gridApi.setGridOption("rowData", data.disputes);
+  if (data.disputes.length === 0) { $("grid").style.display = "none"; $("empty").style.display = "block"; }
+}
+
+async function selectDispute(d) {
+  CURRENT = d; PACK = null;
+  $("drawer").classList.add("show");
+  $("d-title").textContent = d.disputeId + " — " + d.reason.replaceAll("_", " ").toLowerCase();
+  $("d-kv").innerHTML = [
+    ["Status", statusPill(d.status)],
+    ["Requested", esc((d.amount ?? "—") + " " + (d.currency ?? ""))],
+    ["Opened", esc(d.openedAt?.replace("T", " ").slice(0, 19) ?? "—")],
+    ["Respond by", esc(d.respondBy?.replace("T", " ").slice(0, 19) ?? "—") + (d.refusalCount ? ' · <span class="pill open">' + d.refusalCount + " signed refusal(s) on mandate</span>" : "")],
+    ["Linked receipt", d.linkedReceiptId ? '<span class="mono">' + esc(d.linkedReceiptId) + "</span>" : "—"],
+    ["Source", d.source === "paypal" ? "PayPal Disputes API" : "mock (labeled)"],
+  ].map(([k, v]) => '<div class="k">' + k + '</div><div>' + v + "</div>").join("");
+  $("d-pack").textContent = "generate the pack to preview it…";
+  $("d-hint").innerHTML = "";
+  $("submit").disabled = SOURCE !== "paypal";
+  $("submit").textContent = SOURCE === "paypal" ? "Submit evidence" : "Submit evidence (sandbox only)";
+  await generatePack();
+}
+
+async function generatePack() {
+  if (!CURRENT) return;
+  $("d-pack").textContent = "building pack from the sealed journal…";
+  try {
+    PACK = await api("/api/disputes/" + encodeURIComponent(CURRENT.disputeId) + "/evidence-pack");
+    showTab("md");
+  } catch (e) {
+    $("d-pack").textContent = "error: " + e.message;
+  }
+}
+
+function showTab(which) {
+  $("tab-md").classList.toggle("active", which === "md");
+  $("tab-json").classList.toggle("active", which === "json");
+  if (!PACK) return;
+  $("d-pack").textContent = which === "md" ? PACK.markdown : JSON.stringify(PACK.pack, null, 2);
+}
+$("tab-md").onclick = () => showTab("md");
+$("tab-json").onclick = () => showTab("json");
+
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+$("dl-md").onclick = () => PACK && download(CURRENT.disputeId + "-evidence.md", PACK.markdown, "text/markdown");
+$("dl-json").onclick = () => PACK && download(CURRENT.disputeId + "-evidence.json", JSON.stringify(PACK.pack, null, 2), "application/json");
+
+$("submit").onclick = async () => {
+  if (!CURRENT) return;
+  $("submit").disabled = true;
+  $("submit").textContent = "submitting…";
+  try {
+    const r = await api("/api/disputes/" + encodeURIComponent(CURRENT.disputeId) + "/submit-evidence", { method: "POST" });
+    $("d-hint").innerHTML = (r.ok ? '<span style="color:var(--green)">✓ ' : '<span style="color:var(--red)">✗ ') + esc(r.detail) + "</span>";
+  } catch (e) {
+    $("d-hint").innerHTML = '<span style="color:var(--red)">✗ ' + esc(e.message) + "</span>";
+  }
+  $("submit").disabled = false;
+  $("submit").textContent = "Submit evidence";
+};
+
+$("refresh").onclick = () => loadDisputes().catch((e) => { $("statusline").textContent = e.message; });
+$("seed").onclick = async () => {
+  $("seed").disabled = true;
+  try {
+    const r = await api("/api/disputes/seed-sample", { method: "POST" });
+    $("toolhint").textContent = r.detail;
+    await loadDisputes();
+  } catch (e) { $("toolhint").textContent = e.message; }
+  $("seed").disabled = false;
+};
+
+loadDisputes().catch((e) => { $("statusline").textContent = "error: " + e.message; });
+</script>
+</body>
+</html>

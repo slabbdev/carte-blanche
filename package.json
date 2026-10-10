@@ -1,6 +1,6 @@
 {
   "name": "carte-blanche",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with PayPal",
   "type": "module",
   "engines": {
@@ -15,6 +15,7 @@
     "demo:llm": "tsx src/agent/llm.ts"
   },
   "dependencies": {
+    "ag-grid-community": "^36.2.0",
     "express": "^4.21.2"
   },
   "devDependencies": {

@@ -49,8 +49,10 @@ npm run demo
 
 ## Real PayPal sandbox
 
-Create a REST app in the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox),
-then:
+Create a **Merchant** REST app in the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox)
+(choose the *Merchant* account type — *Platform* is for marketplaces / PayPal for Platforms partner
+flows, which this doesn't need; a merchant app covers Orders, Disputes on your own transactions and
+Transaction Search), then:
 
 ```bash
 PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm start
@@ -58,6 +60,15 @@ PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm start
 
 Every id and capture then comes from the PayPal sandbox REST API (Orders v2).
 `PAYPAL_MODE=mock` (default) is a dev simulator and never pretends to be PayPal.
+
+## Merchant dispute cockpit
+
+`/dashboard` is the merchant-facing cockpit (AG Grid): disputes with their 10-day response
+deadlines, the linked receipt for each agent purchase, and one-click **evidence packs** —
+markdown or JSON — that bundle the signed mandate, the receipt, the verified journal chain and
+the signed refusals proving enforcement was live. Submit goes through PayPal's
+`provide-evidence` (sandbox); in mock mode the pack is real and downloadable, the submission is
+refused honestly.
 
 ## LLM agent
 
@@ -112,6 +123,10 @@ src/
 | `POST /api/mandates/:id/revoke` | revoke (immediate) |
 | `POST /api/agent/purchase` | **the agent boundary** — receipt or signed refusal |
 | `GET /api/receipts?mandate_id=` | receipts + refusals |
+| `GET /dashboard` | merchant dispute cockpit (AG Grid) |
+| `GET /api/disputes` | disputes (sandbox API, or labeled mock rows) |
+| `GET /api/disputes/:id/evidence-pack` | evidence bundle (JSON + markdown) |
+| `POST /api/disputes/:id/submit-evidence` | submit via PayPal `provide-evidence` |
 | `GET /api/verify/:kind/:id` | full verification report |
 | `GET /api/journal/verify` | chain integrity |
 | `GET /healthz` | liveness + rails mode |
@@ -128,8 +143,8 @@ src/
 
 ## Roadmap
 
-1. **S2** — merchant dispute cockpit (AG Grid): disputes list, 10-day deadlines, evidence timeline.
-2. **S3** — dispute evidence packs via PayPal Customer Disputes API (`provide-evidence`).
+1. **S2 ✓** — merchant dispute cockpit (AG Grid): disputes list, 10-day deadlines, evidence packs.
+2. **S3** — exercise the flow against a live sandbox: SAMPLE disputes + `provide-evidence` round-trip, fulfillment evidence (Tracking API).
 3. **S4** — Merkle inclusion proofs + RFC 3161 anchoring of the journal (portable verification).
 4. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.
 
