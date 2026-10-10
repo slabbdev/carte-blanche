@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Verify — Carte Blanche</title>
+<style>
+  :root {
+    --bg: #0a0f16; --panel: #101823; --border: #1e2a3a; --text: #e6edf3;
+    --muted: #8b98a9; --green: #34d399; --red: #f87171; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+  a { color: #60a5fa; text-decoration: none; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h1 a { color: var(--text); }
+  h1 .card { display: inline-block; background: #fff; color: #0a0f16; border-radius: 6px; padding: 1px 8px; font-weight: 800; }
+  .sub { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+  .verdict { border-radius: 12px; padding: 18px 20px; font-size: 18px; font-weight: 700; margin-bottom: 18px; }
+  .verdict.ok { border: 1px solid rgba(52,211,153,.5); background: rgba(52,211,153,.07); color: var(--green); }
+  .verdict.bad { border: 1px solid rgba(248,113,113,.5); background: rgba(248,113,113,.07); color: var(--red); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0 0 12px; }
+  .check { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 14px; align-items: baseline; }
+  .check:first-of-type { border-top: 0; }
+  .mark { font-weight: 800; }
+  .mark.ok { color: var(--green); } .mark.bad { color: var(--red); }
+  .detail { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; font-family: var(--mono); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px; }
+  td { padding: 5px 8px; border-top: 1px solid var(--border); font-family: var(--mono); word-break: break-all; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 4px 14px; font-size: 13px; }
+  .kv .k { color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre { background: #0b121c; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 11px; overflow: auto; max-height: 420px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 10px; }
+  .pill.ok { background: rgba(52,211,153,.12); color: var(--green); }
+  .pill.no { background: rgba(248,113,113,.12); color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><a href="/"><span class="card">CARTE</span> BLANCHE</a></h1>
+  <div class="sub">Public verification — anyone with the artifact id can check signatures and the journal, no account needed.</div>
+  <div id="root"><p class="sub">verifying…</p></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const id = location.pathname.split("/").pop();
+const kind = id.startsWith("rcpt-") ? "receipts" : id.startsWith("deny-") ? "denials" : null;
+
+async function main() {
+  const root = $("#root");
+  if (!kind) {
+    root.innerHTML = '<p class="sub">Unknown artifact id. Ids start with <code>rcpt-</code> or <code>deny-</code>.</p>';
+    return;
+  }
+  let data;
+  try {
+    data = await fetch(`/api/verify/${kind}/${id}`).then((r) => r.json());
+  } catch {
+    root.innerHTML = '<p class="sub">verification service unreachable</p>';
+    return;
+  }
+  if (data.error) {
+    root.innerHTML = `<p class="sub">${esc(data.error)}</p>`;
+    return;
+  }
+  const { report, chain, full } = data;
+  const art = report.subject === "receipt" ? full.receipt : full.denial;
+  const amount = report.subject === "receipt"
+    ? `${esc(full.receipt.amount)} ${esc(full.receipt.currency)}`
+    : `${esc(full.denial.requested.amount)} ${esc(full.denial.requested.currency)} (refused)`;
+
+  root.innerHTML = `
+    <div class="verdict ${report.overall ? "ok" : "bad"}">
+      ${report.overall ? "VERIFIED" : "VERIFICATION FAILED"} — ${report.subject} <span class="mono" style="font-size:14px">${esc(report.id)}</span>
+    </div>
+
+    <section>
+      <h2>Checks</h2>
+      ${report.checks.map((c) => `
+        <div class="check">
+          <span class="mark ${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"}</span>
+          <span>${esc(c.label)}</span>
+          ${c.detail ? `<span class="detail">${esc(c.detail)}</span>` : ""}
+        </div>`).join("")}
+      <div class="check">
+        <span class="mark ${chain.ok ? "ok" : "bad"}">${chain.ok ? "✓" : "✗"}</span>
+        <span>Sealed journal intact at verification time</span>
+        <span class="detail">${chain.length} events · tip ${esc(chain.tip.slice(0, 16))}…</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Artifact</h2>
+      <div class="kv">
+        <div class="k">Type</div><div>${report.subject === "receipt" ? '<span class="pill ok">PURCHASE RECEIPT</span>' : '<span class="pill no">PURCHASE REFUSAL</span>'}</div>
+        <div class="k">Amount</div><div>${amount}</div>
+        <div class="k">Mandate</div><div class="mono">${esc(art.mandateId)}</div>
+        ${report.subject === "receipt" ? `
+          <div class="k">PayPal order</div><div class="mono">${esc(full.receipt.orderId)} (capture ${esc(full.receipt.captureId)}, rails: ${esc(full.railsMode)})</div>
+          <div class="k">For</div><div>${esc(full.receipt.description)}</div>` : `
+          <div class="k">Refusal reason</div><div>[${esc(full.denial.reasonCode)}] ${esc(full.denial.reasonDetail)}</div>`}
+        <div class="k">Issued at</div><div class="mono">${esc(art.createdAt)}</div>
+        <div class="k">Principal → Agent</div><div>${full.mandate ? `${esc(full.mandate.principal)} → ${esc(full.mandate.agent)} · ${esc(full.mandate.purpose)}` : "<i>mandate not bundled</i>"}</div>
+        ${full.mandate ? `
+          <div class="k">Limits</div><div class="mono">max ${esc(full.mandate.limits.maxPerTransaction)} / total ${esc(full.mandate.limits.maxTotalSpend)} ${esc(full.mandate.limits.currency)} · window ${esc(full.mandate.limits.windowStart.slice(0, 10))} → ${esc(full.mandate.limits.windowEnd.slice(0, 10))}</div>` : ""}
+      </div>
+    </section>
+
+    ${report.subject === "receipt" && full.events.length ? `
+    <section>
+      <h2>Journal events for this operation</h2>
+      <table>
+        <tr><th>seq</th><th>type</th><th>hash</th></tr>
+        ${full.events.map((e) => `<tr><td>${e.seq}</td><td>${esc(e.type)}</td><td>${esc(e.hash.slice(0, 32))}…</td></tr>`).join("")}
+      </table>
+    </section>` : ""}
+
+    <details>
+      <summary>Raw evidence bundle (JSON)</summary>
+      <pre>${esc(JSON.stringify(full, null, 2))}</pre>
+    </details>`;
+}
+
+main();
+</script>
+</body>
+</html>

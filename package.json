@@ -1,0 +1,27 @@
+{
+  "name": "carte-blanche",
+  "version": "0.1.0",
+  "description": "Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with PayPal",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/copy-web.mjs",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "demo": "tsx src/agent/demo.ts",
+    "demo:llm": "tsx src/agent/llm.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

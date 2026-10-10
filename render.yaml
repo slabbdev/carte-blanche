@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: carte-blanche
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAYPAL_MODE
+        value: mock
+      - key: PAYPAL_ENV
+        value: sandbox
+      # Set these in the Render dashboard (do not commit secrets):
+      # PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET  -> switches rails from mock to real sandbox
+      # OPENAI_API_KEY                           -> enables the live LLM agent

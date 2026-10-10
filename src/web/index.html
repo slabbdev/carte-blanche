@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Carte Blanche — your agent shops, you keep the keys</title>
+<style>
+  :root {
+    --bg: #0a0f16; --panel: #101823; --border: #1e2a3a; --text: #e6edf3;
+    --muted: #8b98a9; --green: #34d399; --red: #f87171; --amber: #fbbf24; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: 0.5px; }
+  h1 .card { display: inline-block; background: #fff; color: #0a0f16; border-radius: 6px; padding: 1px 10px; font-weight: 800; }
+  .tagline { color: var(--muted); margin: 0 0 26px; }
+  .status { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
+  .status b { color: var(--green); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin-bottom: 22px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input, select { width: 100%; background: #0b121c; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  input:focus, select:focus { outline: 1px solid #3b82f6; }
+  button { background: #2563eb; border: 0; color: #fff; font-weight: 600; border-radius: 8px; padding: 9px 16px; cursor: pointer; font-size: 14px; }
+  button:hover { background: #1d4ed8; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  button.ghost:hover { color: var(--text); border-color: #3b4a5f; }
+  button.danger { background: transparent; border: 1px solid #7f1d1d; color: var(--red); font-weight: 500; padding: 4px 10px; font-size: 12px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .card-item { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; background: #0c1420; }
+  .card-item .mono { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 10px; letter-spacing: 0.5px; }
+  .pill.ok { background: rgba(52, 211, 153, 0.12); color: var(--green); }
+  .pill.no { background: rgba(248, 113, 113, 0.12); color: var(--red); }
+  .pill.warn { background: rgba(251, 191, 36, 0.12); color: var(--amber); }
+  .pill.mock { background: rgba(139, 152, 169, 0.15); color: var(--muted); }
+  .outcome { border-radius: 10px; padding: 14px 16px; margin-top: 12px; font-size: 14px; display: none; }
+  .outcome.receipt { border: 1px solid rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.06); }
+  .outcome.denial { border: 1px solid rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.06); }
+  .outcome .mono { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  a { color: #60a5fa; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; font-style: italic; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 6px 8px; border-top: 1px solid var(--border); }
+  td.mono { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="card">CARTE</span> BLANCHE</h1>
+    <div class="status" id="status">connecting…</div>
+  </header>
+  <p class="tagline">Your agent shops. You keep the keys. Every purchase under a signed mandate, every refusal a signed proof.</p>
+
+  <section>
+    <h2>1 · Grant a mandate</h2>
+    <div class="grid">
+      <div><label>Principal (you)</label><input id="m-principal" value="sam" /></div>
+      <div><label>Agent</label><input id="m-agent" value="shopping-agent-1" /></div>
+      <div><label>Purpose</label><input id="m-purpose" value="team snacks this week" /></div>
+      <div><label>Currency</label>
+        <select id="m-currency"><option>USD</option><option>EUR</option><option>GBP</option></select>
+      </div>
+      <div><label>Max / transaction</label><input id="m-maxtx" value="30.00" /></div>
+      <div><label>Max total</label><input id="m-maxtotal" value="60.00" /></div>
+      <div><label>Valid until</label><input id="m-windowend" type="datetime-local" /></div>
+      <div><label>Payee allowlist (comma-separated, empty = any)</label><input id="m-payees" placeholder="store@example.com" /></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="create">Grant mandate</button>
+      <span class="muted" style="font-size:12px">Ed25519-signed at creation. Immutable afterwards — revocation is the only exit.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · Mandates</h2>
+    <div id="mandates"><div class="empty">none yet</div></div>
+  </section>
+
+  <section>
+    <h2>3 · Act as the agent</h2>
+    <div class="row">
+      <div style="min-width:220px"><label>Mandate</label><select id="a-mandate"><option value="">—</option></select></div>
+      <div style="width:110px"><label>Amount</label><input id="a-amount" value="25.00" /></div>
+      <div style="flex:1;min-width:200px"><label>What for</label><input id="a-desc" value="coffee beans for the team" /></div>
+      <div style="width:170px"><label>Payee (optional)</label><input id="a-payee" placeholder="leave empty" /></div>
+      <button id="buy">Attempt purchase</button>
+    </div>
+    <div class="outcome" id="outcome"></div>
+    <p class="muted" style="font-size:12px;margin-bottom:0">
+      This button is exactly what the <code>purchase()</code> tool available to an LLM agent does —
+      see <code>npm run demo:llm</code>. Try exceeding the mandate: the refusal is signed too.
+    </p>
+  </section>
+
+  <section>
+    <h2>4 · Receipts &amp; refusals</h2>
+    <div id="outcomes"><div class="empty">nothing yet</div></div>
+  </section>
+
+  <section>
+    <h2>Sealed journal</h2>
+    <div id="journal" class="muted" style="font-size:13px">checking…</div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+window.dispatchEvent(new Event("load"));
+// default window end: +7 days
+{
+  const d = new Date(Date.now() + 7 * 864e5);
+  $("m-windowend").value = new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
+async function refreshStatus() {
+  try {
+    const h = await api("/healthz");
+    $("status").innerHTML = `rails <b>${esc(h.rails)}</b> · journal ${h.journalLength} events`;
+  } catch { $("status").textContent = "server unreachable"; }
+}
+
+async function refreshJournal() {
+  try {
+    const v = await api("/api/journal/verify");
+    $("journal").innerHTML = v.ok
+      ? `chain <b style="color:var(--green)">intact</b> — ${v.length} events, tip <span class="mono">${esc(v.tip.slice(0, 24))}…</span>`
+      : `chain <b style="color:var(--red)">BROKEN at seq ${v.brokenAt}</b>`;
+  } catch { $("journal").textContent = "unavailable"; }
+}
+
+async function refreshMandates() {
+  const list = await api("/api/mandates");
+  const sel = $("a-mandate");
+  sel.innerHTML = '<option value="">—</option>' + list.map((m) => `<option value="${esc(m.mandate.id)}">${esc(m.mandate.id)}</option>`).join("");
+  $("mandates").innerHTML = list.length === 0 ? '<div class="empty">none yet</div>' : list.map((m) => `
+    <div class="card-item">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span class="mono">${esc(m.mandate.id)}</span>
+        ${m.revoked ? '<span class="pill no">REVOKED</span>' : '<span class="pill ok">ACTIVE</span>'}
+        <span style="margin-left:auto"><button class="danger" onclick="revoke('${esc(m.mandate.id)}')">Revoke</button></span>
+      </div>
+      <div class="mono">${esc(m.mandate.principal)} → ${esc(m.mandate.agent)} · ${esc(m.mandate.purpose)}</div>
+      <div class="mono">max ${esc(m.mandate.limits.maxPerTransaction)} ${esc(m.mandate.limits.currency)} / tx · total ${esc(m.mandate.limits.maxTotalSpend)} · until ${esc(m.mandate.limits.windowEnd.slice(0, 16))}</div>
+    </div>`).join("");
+}
+
+async function refreshOutcomes() {
+  const data = await api("/api/receipts");
+  const items = [
+    ...data.receipts.map((r) => ({ t: "receipt", o: r })),
+    ...data.denials.map((d) => ({ t: "denial", o: d })),
+  ].sort((a, b) => (a.o.createdAt < b.o.createdAt ? 1 : -1));
+  $("outcomes").innerHTML = items.length === 0 ? '<div class="empty">nothing yet</div>' : items.map(({ t, o }) => `
+    <div class="card-item">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        ${t === "receipt" ? '<span class="pill ok">RECEIPT</span>' : '<span class="pill no">REFUSED</span>'}
+        <span class="mono">${esc(t === "receipt" ? o.receiptId : o.denialId)}</span>
+        <span class="muted" style="font-size:12px">${esc(o.createdAt.replace("T", " ").slice(0, 19))}</span>
+        <span style="margin-left:auto"><a href="/verify/${esc(t === "receipt" ? o.receiptId : o.denialId)}">verify →</a></span>
+      </div>
+      <div class="mono">${t === "receipt"
+        ? `${esc(o.amount)} ${esc(o.currency)} · ${esc(o.description)} · order ${esc(o.orderId)} · capture ${esc(o.captureId)}`
+        : `${esc(o.requested.amount)} ${esc(o.requested.currency)} · ${esc(o.requested.description)} · [${esc(o.reasonCode)}] ${esc(o.reasonDetail)}`}</div>
+    </div>`).join("");
+}
+
+$("create").onclick = async () => {
+  try {
+    const payees = $("m-payees").value.split(",").map((s) => s.trim()).filter(Boolean);
+    await api("/api/mandates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        principal: $("m-principal").value,
+        agent: $("m-agent").value,
+        purpose: $("m-purpose").value,
+        currency: $("m-currency").value,
+        max_per_transaction: $("m-maxtx").value,
+        max_total_spend: $("m-maxtotal").value,
+        payees,
+        window_end: new Date($("m-windowend").value).toISOString(),
+      }),
+    });
+    await refreshMandates();
+  } catch (e) { alert(e.message); }
+};
+
+window.revoke = async (id) => {
+  if (!confirm("Revoke this mandate? Agents are refused immediately after.")) return;
+  await api(`/api/mandates/${id}/revoke`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "revoked from console" }) });
+  await refreshMandates();
+};
+
+$("buy").onclick = async () => {
+  const box = $("outcome");
+  box.style.display = "block";
+  box.className = "outcome";
+  box.innerHTML = "<span class='muted'>checking mandate…</span>";
+  try {
+    const data = await api("/api/agent/purchase", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mandate_id: $("a-mandate").value,
+        amount: $("a-amount").value,
+        currency: "USD",
+        description: $("a-desc").value,
+        payee: $("a-payee").value || undefined,
+      }),
+    });
+    const isR = data.outcome === "receipt";
+    box.className = `outcome ${isR ? "receipt" : "denial"}`;
+    const id = isR ? data.receipt.receiptId : data.denial.denialId;
+    box.innerHTML = isR
+      ? `<b style="color:var(--green)">RECEIPT</b> <span class="mono">${esc(id)}</span> — ${esc(data.receipt.amount)} ${esc(data.receipt.currency)} for “${esc(data.receipt.description)}” · order <span class="mono">${esc(data.receipt.orderId)}</span> · <a href="/verify/${esc(id)}">verify →</a>`
+      : `<b style="color:var(--red)">REFUSED</b> <span class="mono">${esc(id)}</span> — [${esc(data.denial.reasonCode)}] ${esc(data.denial.reasonDetail)} · <a href="/verify/${esc(id)}">verify refusal →</a>`;
+    await Promise.all([refreshOutcomes(), refreshJournal()]);
+  } catch (e) {
+    box.className = "outcome denial";
+    box.innerHTML = `<b style="color:var(--red)">error</b> ${esc(e.message)}`;
+  }
+};
+
+refreshStatus(); refreshMandates(); refreshOutcomes(); refreshJournal();
+</script>
+</body>
+</html>

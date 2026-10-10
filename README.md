@@ -1,0 +1,137 @@
+# Carte Blanche
+
+**Your agent shops. You keep the keys.**
+
+Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with **PayPal**.
+
+An AI agent with a payment tool is a walking blank check — today's toolkits will capture an order
+because the model decided to. Carte Blanche is the layer that sits between the agent and PayPal:
+
+- **Mandates** — the principal grants a signed, immutable spending mandate (per-transaction cap,
+  cumulative cap, currency, payee allowlist, time window). Revocation is instant and the only exit.
+- **Enforcement** — every mutative call is checked against the mandate *before* money moves,
+  executed with a deterministic `PayPal-Request-Id` (a retry can never double-spend), and answered
+  with a signed receipt — or a **signed proof of refusal** naming the limit that blocked it.
+- **Sealed journal** — every event lands in an append-only SHA-256 chain with signed checkpoints.
+- **Public verification** — anyone holding a receipt or refusal id can verify all signatures and
+  the journal at `/verify/<id>`, no account needed. Built to become the evidence pack a merchant
+  submits in a PayPal dispute (roadmap).
+
+## Why
+
+Agentic commerce is being built (ACP, AP2, x402, agent toolkits) and none of these layers ship
+spend controls, human-reviewable receipts, or dispute evidence for agent-initiated purchases.
+The gap is documented, not hypothetical: the official PayPal agent toolkit has no approval hooks
+and a client-level idempotence key (double-spend on retry); no protocol defines disputes for
+agent purchases. Carte Blanche is a working answer on PayPal rails.
+
+## Quickstart (no credentials needed)
+
+```bash
+npm install
+npm run build
+npm start          # rails: mock — clearly labeled MOCK-* ids
+# open http://localhost:8790
+```
+
+The console lets you grant a mandate, act as the agent, and try to exceed the mandate.
+Every outcome links to its public verification page.
+
+End-to-end scripted scenario (30 seconds, no server needed):
+
+```bash
+npm run demo
+```
+
+## Real PayPal sandbox
+
+Create a REST app in the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox),
+then:
+
+```bash
+PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm start
+```
+
+Every id and capture then comes from the PayPal sandbox REST API (Orders v2).
+`PAYPAL_MODE=mock` (default) is a dev simulator and never pretends to be PayPal.
+
+## LLM agent
+
+```bash
+OPENAI_API_KEY=... npm run demo:llm -- <mandate_id> "Buy a mechanical keyboard for under $60"
+```
+
+Works with any OpenAI-compatible endpoint (`OPENAI_BASE_URL`, `OPENAI_MODEL`). The agent's only
+payment tools are `mandate_status`, `purchase` and `my_receipts` — all funnelled through the
+enforcer.
+
+## How verification works
+
+A receipt is a signed bundle: the receipt, the mandate it was issued under, both Ed25519
+signatures, and the journal events of the operation (`purchase_requested` → `order_created` →
+`order_captured`). The verifier page re-hashes every event, checks both signatures, and confirms
+the chain is intact at verification time. Refusals are signed the same way — *"the agent tried to
+spend and was blocked, here is the proof"* is exactly as valuable as the receipt.
+
+Portability note (honest v0 limitation): the bundle is self-consistent but anchored to this
+server; Merkle inclusion proofs + RFC 3161 timestamping (so verification needs no trust in the
+server) are the next milestone.
+
+## Architecture
+
+```
+LLM agent ── tools ──►  Enforcer  ── mandate check ──►  PayPal REST (Orders v2)
+                          │  │                            (deterministic PayPal-Request-Id)
+        signed mandate ───┘  └── events ──►  Sealed journal (SHA-256 chain + signed checkpoints)
+                                                │
+                                     signed receipts / signed refusals ──► /verify/<id>
+```
+
+```
+src/
+  lib/        canonical JSON, Ed25519, keys, atomic JSON persistence
+  mandate/    mandate schema + money math, signing, immutable store + revocation
+  journal/    append-only hash chain, checkpoints, per-mandate spend aggregation
+  paypal/     thin REST client (token cache, per-call request ids) + mock/sandbox rails
+  enforcer/   the boundary: checks, idempotence, journalling, receipts & refusals
+  receipts/   evidence bundles + verification reports
+  agent/      tool schemas, OpenAI-compatible loop, scripted demo
+  web/        console + public verification page (no framework, no build step)
+```
+
+## API
+
+| Route | What |
+|---|---|
+| `POST /api/mandates` | grant a mandate (signed) |
+| `GET /api/mandates` / `GET /api/mandates/:id` | list / detail (incl. captured spend) |
+| `POST /api/mandates/:id/revoke` | revoke (immediate) |
+| `POST /api/agent/purchase` | **the agent boundary** — receipt or signed refusal |
+| `GET /api/receipts?mandate_id=` | receipts + refusals |
+| `GET /api/verify/:kind/:id` | full verification report |
+| `GET /api/journal/verify` | chain integrity |
+| `GET /healthz` | liveness + rails mode |
+
+## Security model (v0, stated plainly)
+
+- The server acts as **custodial principal** (it signs mandates with its own key). Non-custodial
+  signing (principal-held keys, browser wallet) is on the roadmap.
+- Mandates are immutable; only revocation changes behavior, and revocations are journalled.
+- Amounts are decimal strings compared in minor units (bigint) — no floats in the auth path.
+- Keys live in `KEYS_DIR` (0600), state in `STATE_DIR`; both are gitignored.
+- The journal detects any tampering (chain break) but v0 cannot *prove* prior existence to a
+  third party — that is the Merkle + RFC 3161 milestone above.
+
+## Roadmap
+
+1. **S2** — merchant dispute cockpit (AG Grid): disputes list, 10-day deadlines, evidence timeline.
+2. **S3** — dispute evidence packs via PayPal Customer Disputes API (`provide-evidence`).
+3. **S4** — Merkle inclusion proofs + RFC 3161 anchoring of the journal (portable verification).
+4. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.
+
+## Status
+
+Built in the open for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com)
+(Oct–Nov 2026). See [PROGRESSION.md](PROGRESSION.md) for the dated build log.
+
+MIT — see [LICENSE](LICENSE).
