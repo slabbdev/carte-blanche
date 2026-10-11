@@ -1,6 +1,6 @@
 {
   "name": "carte-blanche",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with PayPal",
   "type": "module",
   "engines": {

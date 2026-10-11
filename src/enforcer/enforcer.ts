@@ -270,6 +270,14 @@ export class Enforcer {
     const events = this.journal.eventsFor(
       (d) => d.logical_key === receipt.logicalKey && d.mandate_id === receipt.mandateId,
     );
+    const captured = events.find((e) => e.type === "order_captured");
+    const inclusion = captured
+      ? {
+          seq: captured.seq,
+          proof: this.journal.inclusionProofForSeq(captured.seq),
+          treeHead: this.journal.signedTreeHead(),
+        }
+      : undefined;
     return {
       receipt: { ...receipt },
       mandate: signed.mandate,
@@ -279,6 +287,7 @@ export class Enforcer {
       receiptSignature: signReceipt(receipt, this.keys.server.privateKeyB64),
       receiptPublicKey: this.keys.server.publicKeyB64,
       railsMode: this.rails.mode,
+      ...(inclusion ? { inclusion } : {}),
     };
   }
 

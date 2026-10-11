@@ -1,6 +1,7 @@
 import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex, signCanonical, verifyCanonical } from "../lib/sign.js";
-import type { JournalEvent } from "../journal/journal.js";
+import type { JournalEvent, SignedTreeHead } from "../journal/journal.js";
+import { verifyMerkleInclusion, merkleLeafHash, type MerkleInclusionProof } from "../journal/merkle.js";
 import type { Mandate } from "../mandate/mandate.js";
 
 /** A completed, journalled, signed purchase. */
@@ -38,6 +39,13 @@ export interface Denial {
   journalLength: number;
 }
 
+export interface ReceiptInclusion {
+  /** seq of the order_captured event this proof commits. */
+  seq: number;
+  proof: MerkleInclusionProof;
+  treeHead: SignedTreeHead;
+}
+
 /**
  * A "full" artifact is the self-contained evidence bundle handed to the
  * verifier page and to dispute workflows: the receipt or denial, the mandate
@@ -53,6 +61,8 @@ export interface FullReceipt {
   receiptSignature: string;
   receiptPublicKey: string;
   railsMode: string;
+  /** Present when the journal was non-empty at receipt time: portable inclusion proof. */
+  inclusion?: ReceiptInclusion;
 }
 
 export interface FullDenial {
@@ -129,6 +139,27 @@ export function verifyFullReceipt(full: FullReceipt): VerificationReport {
     ok: receiptOk,
     detail: `signed by ${fingerprint(full.receiptPublicKey)}`,
   });
+
+  if (full.inclusion) {
+    const inc = full.inclusion;
+    const captured = full.events.find((e) => e.type === "order_captured" && e.seq === inc.seq);
+    let inclusionOk = captured !== undefined;
+    let detail = `capture event seq ${inc.seq}`;
+    if (captured) {
+      inclusionOk =
+        verifyMerkleInclusion(merkleLeafHash(captured.hash), inc.proof) &&
+        inc.proof.root === inc.treeHead.root &&
+        inc.proof.leafCount === inc.treeHead.size &&
+        verifyCanonical(inc.treeHead.publicKey, { size: inc.treeHead.size, root: inc.treeHead.root, timestamp: inc.treeHead.timestamp }, inc.treeHead.signature);
+      detail = `root ${inc.treeHead.root.slice(0, 12)}… signed by ${fingerprint(inc.treeHead.publicKey)}`;
+    }
+    checks.push({
+      id: "merkle_inclusion",
+      label: "Capture event committed by signed Merkle tree head (portable)",
+      ok: inclusionOk,
+      detail,
+    });
+  }
 
   return { subject: "receipt", id: full.receipt.receiptId, checks, overall: checks.every((c) => c.ok) };
 }

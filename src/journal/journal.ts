@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex, signCanonical } from "../lib/sign.js";
+import { buildMerkleTree, inclusionProof, merkleLeafHash, type MerkleInclusionProof, type MerkleTree } from "./merkle.js";
 
 const GENESIS_HASH = sha256Hex("carte-blanche/journal/genesis/v1");
 
@@ -24,6 +25,15 @@ export interface ChainVerification {
 export interface JournalCheckpoint {
   upToSeq: number;
   tip: string;
+  signature: string;
+  publicKey: string;
+}
+
+/** Signed tree head: the journal's position, signed by the journal key. */
+export interface SignedTreeHead {
+  size: number;
+  root: string;
+  timestamp: string;
   signature: string;
   publicKey: string;
 }
@@ -77,6 +87,41 @@ export class Journal {
 
   tip(): string {
     return this.events[this.events.length - 1]?.hash ?? GENESIS_HASH;
+  }
+
+  private merkleCache: { size: number; tree: MerkleTree } | undefined;
+
+  /** Merkle tree over every event in the chain (rebuilt only when size changes). */
+  private merkleTree(): MerkleTree {
+    if (this.merkleCache?.size === this.events.length) return this.merkleCache.tree;
+    const tree = buildMerkleTree(this.events.map((e) => e.hash));
+    this.merkleCache = { size: this.events.length, tree };
+    return tree;
+  }
+
+  /** Inclusion proof that event `seq` is committed by the current root. */
+  inclusionProofForSeq(seq: number): MerkleInclusionProof & { eventHash: string } {
+    const event = this.events[seq - 1];
+    if (!event || event.seq !== seq) throw new Error(`no event with seq ${seq}`);
+    const proof = inclusionProof(this.merkleTree(), seq - 1);
+    return { ...proof, eventHash: merkleLeafHash(event.hash) };
+  }
+
+  private sthCache: { size: number; sth: SignedTreeHead } | undefined;
+
+  /** Signed tree head over the whole chain — cached per size so a given tree always yields the same STH. */
+  signedTreeHead(): SignedTreeHead {
+    const tree = this.merkleTree();
+    if (this.sthCache?.size === tree.leafCount) return this.sthCache.sth;
+    const timestamp = new Date().toISOString();
+    const payload = { size: tree.leafCount, root: tree.root, timestamp };
+    const sth: SignedTreeHead = {
+      ...payload,
+      signature: signCanonical(this.keyPair.privateKeyB64, payload),
+      publicKey: this.keyPair.publicKeyB64,
+    };
+    this.sthCache = { size: tree.leafCount, sth };
+    return sth;
   }
 
   get length(): number {

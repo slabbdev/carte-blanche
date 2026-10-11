@@ -88,9 +88,15 @@ signatures, and the journal events of the operation (`purchase_requested` → `o
 the chain is intact at verification time. Refusals are signed the same way — *"the agent tried to
 spend and was blocked, here is the proof"* is exactly as valuable as the receipt.
 
-Portability note (honest v0 limitation): the bundle is self-consistent but anchored to this
-server; Merkle inclusion proofs + RFC 3161 timestamping (so verification needs no trust in the
-server) are the next milestone.
+**Portable commitment (v0.3):** every receipt also carries a **Merkle inclusion proof**: the
+capture event is provably committed by a **signed tree head** over the *whole* journal (Ed25519 by
+the journal key). Anyone holding the bundle can recompute the proof offline — the receipt no
+longer just claims "these events happened", it *commits* to the entire append-only history.
+Scheme: CT-inspired padded Merkle tree, deliberately not RFC 6962 (documented in `src/journal/merkle.ts`).
+
+Still honest: the tree head is signed by *our* journal key, so it proves internal consistency and
+commitment — proving *when* (to a third party, without trusting us) is the RFC 3161 TSA anchor,
+next milestone.
 
 ## Architecture
 
@@ -138,15 +144,17 @@ src/
 - Mandates are immutable; only revocation changes behavior, and revocations are journalled.
 - Amounts are decimal strings compared in minor units (bigint) — no floats in the auth path.
 - Keys live in `KEYS_DIR` (0600), state in `STATE_DIR`; both are gitignored.
-- The journal detects any tampering (chain break) but v0 cannot *prove* prior existence to a
-  third party — that is the Merkle + RFC 3161 milestone above.
+- The journal detects any tampering (chain break) and **v0.3 receipts commit to the whole chain**
+  via Merkle inclusion proofs against signed tree heads; the journal key is still ours, so
+  third-party proof of *when* waits for the TSA anchor (S4b).
 
 ## Roadmap
 
 1. **S2 ✓** — merchant dispute cockpit (AG Grid): disputes list, 10-day deadlines, evidence packs.
 2. **S3** — exercise the flow against a live sandbox: SAMPLE disputes + `provide-evidence` round-trip, fulfillment evidence (Tracking API).
-3. **S4** — Merkle inclusion proofs + RFC 3161 anchoring of the journal (portable verification).
-4. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.
+3. **S4a ✓** — Merkle inclusion proofs + signed tree heads on every receipt (portable commitment).
+4. **S4b** — RFC 3161 TSA anchoring of tree heads (third-party *when*).
+5. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.
 
 ## Status
 
