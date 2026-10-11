@@ -8,6 +8,10 @@ Spending mandates, sealed receipts and dispute-proof audits for AI agents paying
 (it replays a recorded run — press the buttons, watch refusals get signed, then verify everything
 in your own browser with WebCrypto. Recorded by `scripts/capture-demo.ts`, served from `docs/`.)
 
+**▶ Live app on Render (PayPal sandbox rails): https://carte-blanche-6jgo.onrender.com** — grant a
+mandate, spend as the agent, watch a real sandbox order get captured, then verify the receipt at
+`/verify/<id>`. Free instance: the first hit after ~15 min idle takes ~50 s to wake.
+
 An AI agent with a payment tool is a walking blank check — today's toolkits will capture an order
 because the model decided to. Carte Blanche is the layer that sits between the agent and PayPal:
 
