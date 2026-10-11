@@ -162,3 +162,20 @@ Built in the open for the [PayPal AI Hackathon](https://paypalaihackathon.devpos
 (Oct–Nov 2026). See [PROGRESSION.md](PROGRESSION.md) for the dated build log.
 
 MIT — see [LICENSE](LICENSE).
+
+## Sandbox end-to-end (real rails)
+
+```bash
+npm run roundtrip:sandbox        # mandate → real order+capture → dispute probe → evidence pack
+npm run roundtrip:sandbox -- --dispute PP-D-…   # steps 3-5 against a buyer-opened dispute
+```
+
+Known PayPal sandbox limits, hit live on 2026-10-11 and documented rather than hidden:
+card-funded orders auto-capture at creation (`ORDER_ALREADY_CAPTURED` — our rails layer
+reconciles with the real capture instead of crashing: the double-spend trap absorbed where it
+belongs); `POST /v1/customer/disputes` returns 500 on every schema-valid body (their bug — probe
+log kept in `.state/dispute-probe.log`, debug_ids included). A buyer-opened dispute from the
+sandbox Resolution Center completes the round-trip: pass its id with `--dispute`.
+
+Render deploy: `python3 scripts/render-deploy.py` (API key at `~/.zcode/secrets/render-api.key`,
+secrets from `.env`, never echoed).
