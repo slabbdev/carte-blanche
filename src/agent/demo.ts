@@ -10,6 +10,10 @@ import { MockRails } from "../paypal/adapter.js";
 import { Enforcer } from "../enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "../receipts/receipts.js";
 
+import { loadEnvFile } from "../lib/env.js";
+
+loadEnvFile();
+
 /**
  * Scripted end-to-end scenario over MockRails (no credentials needed):
  *   1. a principal grants a $60 weekly mandate,

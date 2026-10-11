@@ -1,3 +1,7 @@
+import { loadEnvFile } from "../lib/env.js";
+
+loadEnvFile();
+
 import { AGENT_TOOLS, executeTool } from "./tools.js";
 
 /**

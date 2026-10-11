@@ -12,6 +12,10 @@ import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
 import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 
+import { loadEnvFile } from "./lib/env.js";
+
+loadEnvFile();
+
 const PORT = Number(process.env.PORT ?? 8790);
 const KEYS_DIR = process.env.KEYS_DIR ?? ".keys";
 const STATE_DIR = process.env.STATE_DIR ?? ".state";

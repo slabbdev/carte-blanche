@@ -102,18 +102,17 @@ export class PayPalClient {
     description?: string;
     payee?: string;
     requestId: string;
+    /** Raw payment_source (e.g. sandbox test card) — passed through verbatim. */
+    paymentSource?: Record<string, unknown>;
   }): Promise<PayPalResponse<OrderBody>> {
     const unit: Record<string, unknown> = {
       amount: { currency_code: args.currency, value: args.amount },
     };
     if (args.description) unit.description = args.description.slice(0, 127);
     if (args.payee) unit.payee = { email_address: args.payee };
-    return this.request<OrderBody>(
-      "POST",
-      "/v2/checkout/orders",
-      { intent: "CAPTURE", purchase_units: [unit] },
-      args.requestId,
-    );
+    const body: Record<string, unknown> = { intent: "CAPTURE", purchase_units: [unit] };
+    if (args.paymentSource) body.payment_source = args.paymentSource;
+    return this.request<OrderBody>("POST", "/v2/checkout/orders", body, args.requestId);
   }
 
   async captureOrder(orderId: string, requestId: string): Promise<PayPalResponse<OrderBody>> {
@@ -150,6 +149,14 @@ export class PayPalClient {
         note: args.note ?? "carte-blanche sample dispute (sandbox)",
       },
     }, undefined);
+  }
+
+  /**
+   * Sandbox helper: files a dispute with an explicit raw body — probe surface
+   * for finding the create-dispute shape the sandbox actually accepts.
+   */
+  async createSampleDisputeBody(body: Record<string, unknown>): Promise<PayPalResponse<Record<string, unknown>>> {
+    return this.request("POST", "/v1/customer/disputes", body, undefined);
   }
 
   /**

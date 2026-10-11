@@ -45,6 +45,11 @@ export interface EvidencePack {
   pending: string[];
 }
 
+/** Sanitized pack id — dispute ids can contain characters unfit for filenames. */
+function packFileId(disputeId: string): string {
+  return `pack-${disputeId.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/-+/g, "-").slice(0, 48)}`;
+}
+
 export function buildEvidencePack(
   dispute: DisputeView,
   deps: { enforcer: Enforcer; journal: Journal; store: MandateStore },
@@ -59,7 +64,7 @@ export function buildEvidencePack(
   if (receipt) pending.push("classic fulfillment evidence (tracking, correspondence) not yet attached — S3 milestone, not claimed here");
 
   const pack: EvidencePack = {
-    packId: `pack-${dispute.disputeId}`,
+    packId: packFileId(dispute.disputeId),
     generatedAt: new Date().toISOString(),
     generator: "carte-blanche v0.2.0",
     dispute: {
