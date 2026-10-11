@@ -84,9 +84,11 @@ export class DisputeService {
     const client = this.deps.client;
     if (!client) return { ok: false, detail: "PayPal client unavailable" };
     const res = await client.provideEvidence(disputeId, evidence, notes);
-    return res.ok
-      ? { ok: true, detail: `evidence submitted to dispute ${disputeId}` }
-      : { ok: false, detail: `PayPal provideEvidence failed (${res.status}): ${JSON.stringify(res.data).slice(0, 400)}` };
+    if (res.ok) return { ok: true, detail: `evidence submitted to dispute ${disputeId}` };
+    // INQUIRY-stage cases (PP-R) use the send-evidence endpoint instead.
+    const fallback = await client.sendEvidence(disputeId, evidence, notes);
+    if (fallback.ok) return { ok: true, detail: `evidence submitted (send-evidence, INQUIRY stage) to ${disputeId}` };
+    return { ok: false, detail: `PayPal evidence failed: provide-evidence → ${res.status}, send-evidence → ${fallback.status}: ${JSON.stringify(fallback.data ?? {}).slice(0, 300)}` };
   }
 
   // ------------------------------------------------------------------

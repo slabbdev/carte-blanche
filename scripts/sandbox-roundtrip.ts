@@ -40,6 +40,7 @@ async function main(): Promise<void> {
   info(`rails: ${rails.mode} · journal: ${journal.length} events`);
 
   // 1) mandate + real purchase (test-card candidates: PayPal rejects unsupported BINs per account)
+if (!process.argv.includes('--dispute')) {
   step("1 · Mandate + real sandbox purchase (order → capture)");
   const mandate: Mandate = {
     id: newMandateId(),
@@ -89,13 +90,14 @@ async function main(): Promise<void> {
   info(`order ${purchase.receipt.orderId} → capture ${purchase.receipt.captureId} (${purchase.receipt.status})`);
   info(`receipt ${purchase.receipt.receiptId} · verification: ${report.overall ? "ALL CHECKS PASS" : "FAIL"} · inclusion root ${purchase.full.inclusion?.treeHead.root.slice(0, 12)}…`);
 
+}
   // 2) a dispute on OUR capture. PayPal documents SAMPLE disputes for sandbox,
   // but their create-dispute backend currently 500s on every well-formed body.
   // Probe variants are logged to the state dir; the honest path forward is a
   // real buyer-opened dispute passed via --dispute.
   step("2 · Dispute on the capture");
   const argDispute = process.argv[process.argv.indexOf("--dispute") + 1];
-  let disputeId: string | undefined = argDispute && argDispute.startsWith("PP-D") ? argDispute : undefined;
+  let disputeId: string | undefined = argDispute && /^(PP-D|PP-R)/.test(argDispute) ? argDispute : undefined;
   if (disputeId) {
     info(`using existing dispute ${disputeId} (passed via --dispute)`);
   } else {
@@ -162,7 +164,10 @@ async function main(): Promise<void> {
   const after = await client.getDispute(disputeId);
   const data = after.data as { status?: string; dispute_life_cycle_stage?: string };
   info(`status=${data.status ?? "?"} · stage=${data.dispute_life_cycle_stage ?? "?"}`);
-  console.log(`\nDONE — mandate ${mandate.id} · capture ${purchase.receipt.captureId} · dispute ${disputeId}`);
+  const scope = process.argv.includes("--dispute")
+    ? `dispute ${disputeId}`
+    : `mandate ${mandate.id} · capture ${purchase.receipt.captureId} · dispute ${disputeId}`;
+  console.log(`\nDONE — ${scope}`);
 }
 
 main().catch((e) => {

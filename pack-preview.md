@@ -1,6 +1,6 @@
 # Dispute evidence pack — preview
 
-Generated 2026-10-11T18:56:02.014Z by carte-blanche v0.2.0 · rails: paypal
+Generated 2026-10-11T20:10:11.574Z by carte-blanche v0.2.0 · rails: paypal
 
 ## 1. Summary
 - Dispute **preview** — reason `ITEM_NOT_RECEIVED`, status `preview`, opened unknown, respond-by unknown

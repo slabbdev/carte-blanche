@@ -92,7 +92,8 @@ export class PayPalClient {
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const data = res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+    const raw = res.status === 204 ? "" : await res.text();
+    const data = (raw.trim() ? (JSON.parse(raw) as T) : (undefined as T));
     return { status: res.status, ok: res.ok, data };
   }
 
@@ -168,6 +169,14 @@ export class PayPalClient {
    */
   async provideEvidence(disputeId: string, evidence: Array<Record<string, unknown>>, notes?: string): Promise<PayPalResponse<Record<string, unknown>>> {
     return this.request("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/provide-evidence`, {
+      evidence,
+      ...(notes ? { notes } : {}),
+    }, undefined);
+  }
+
+  /** INQUIRY-stage counterpart of provide-evidence (PP-R cases). */
+  async sendEvidence(disputeId: string, evidence: Array<Record<string, unknown>>, notes?: string): Promise<PayPalResponse<Record<string, unknown>>> {
+    return this.request("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/send-evidence`, {
       evidence,
       ...(notes ? { notes } : {}),
     }, undefined);
