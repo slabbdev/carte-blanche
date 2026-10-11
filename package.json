@@ -19,6 +19,7 @@
     "smoke:tsa": "tsx scripts/anchor.ts"
   },
   "dependencies": {
+    "ag-charts-community": "^14.2.0",
     "ag-grid-community": "^36.2.0",
     "express": "^4.21.2"
   },

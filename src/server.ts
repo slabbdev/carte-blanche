@@ -42,6 +42,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(webRoot));
 app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-community", "dist")));
+app.use("/vendor/charts", express.static(path.join(repoRoot, "node_modules", "ag-charts-community", "dist", "umd")));
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, rails: rails.mode, journalLength: journal.length, uptimeSec: Math.round(process.uptime()) });
@@ -201,6 +202,52 @@ app.get("/api/journal/events", (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
   res.json({ events: journal.recent(limit) });
 });
+
+// Server-sent events: the cockpit's live feed. Pushes the journal position and
+// the dispute list so the AG Grid can apply async transactions instead of
+// re-reading whole tables.
+const streamClients = new Set<express.Response>();
+async function streamSnapshot(): Promise<Record<string, unknown>> {
+  let rows: unknown[] = [];
+  try {
+    rows = await disputes.list();
+  } catch {
+    /* transient rails outage: stream keeps the journal side alive */
+  }
+  return { journal: { tip: journal.tip(), length: journal.length }, disputes: rows };
+}
+app.get("/api/stream", async (req, res) => {
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+  res.flushHeaders();
+  streamClients.add(res);
+  const push = async () => {
+    try {
+      res.write(`data: ${JSON.stringify(await streamSnapshot())}\n\n`);
+    } catch {
+      /* client gone; close handler cleans up */
+    }
+  };
+  await push();
+  const timer = setInterval(push, 8_000);
+  req.on("close", () => {
+    clearInterval(timer);
+    streamClients.delete(res);
+  });
+});
+
+// Broadcast a tick the moment the journal moves, so live purchases land in the
+// cockpit instantly instead of waiting for the next poll.
+const broadcastTick = (): void => {
+  for (const client of streamClients) {
+    client.write(`data: ${JSON.stringify({ journal: { tip: journal.tip(), length: journal.length } })}\n\n`);
+  }
+};
+const rawAppend = journal.append.bind(journal);
+journal.append = (type: string, data: unknown) => {
+  const event = rawAppend(type, data);
+  broadcastTick();
+  return event;
+};
 
 app.get("/api/journal/anchor", (_req, res) => {
   const anchor = journal.latestAnchor();

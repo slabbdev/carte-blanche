@@ -169,7 +169,7 @@ src/
 
 ## Roadmap
 
-1. **S2 ✓** — merchant dispute cockpit (AG Grid): disputes list, 10-day deadlines, evidence packs.
+1. **S2 ✓** — merchant dispute cockpit (AG Grid + AG Charts): live dispute feed over server-sent events (async row transactions), floating filters, quick filter, deadline row highlighting, status/reason charts, CSV export, persisted column layout.
 2. **S3 ✓** — exercised end-to-end against the live sandbox: wallet purchase → buyer dispute → API → evidence pack (see `npm run roundtrip:sandbox`).
 3. **S4a ✓** — Merkle inclusion proofs + signed tree heads on every receipt (portable commitment).
 4. **S4b ✓** — RFC 3161 TSA anchoring of tree heads (`npm run anchor`; openssl-verified by third parties).
