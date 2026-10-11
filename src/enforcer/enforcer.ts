@@ -38,6 +38,11 @@ export interface PurchaseRequest {
   payee?: string;
   description: string;
   /**
+   * "wallet" stops the order at PAYER_ACTION_REQUIRED so a human can approve
+   * (the two-phase flow); "card" auto-captures in sandbox. Default: card.
+   */
+  funding?: "card" | "wallet";
+  /**
    * Optional caller-supplied key that makes retries idempotent at the business
    * level: the same logical key always returns the same outcome and triggers at
    * most one PayPal side effect. Defaults to a hash of the request fields.
@@ -227,6 +232,7 @@ export class Enforcer {
       description: req.description,
       payee: req.payee,
       requestId: createRequestId,
+      ...(req.funding ? { funding: req.funding } : {}),
     });
     this.journal.append("order_created", {
       mandate_id: req.mandateId,

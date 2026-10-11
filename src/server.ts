@@ -145,6 +145,7 @@ app.post("/api/agent/purchase", async (req, res) => {
     description?: string;
     payee?: string;
     logical_key?: string;
+    funding?: string;
   };
   if (!body.mandate_id || !body.amount || !body.currency || !body.description) {
     return res.status(400).json({ error: "mandate_id, amount, currency and description are required" });
@@ -157,6 +158,7 @@ app.post("/api/agent/purchase", async (req, res) => {
       description: body.description,
       payee: body.payee,
       logicalKey: body.logical_key,
+      funding: body.funding === "wallet" ? "wallet" : undefined,
     });
     if (outcome.kind === "pending") {
       return res.json({
