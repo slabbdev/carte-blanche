@@ -16,7 +16,9 @@
     "roundtrip:sandbox": "tsx scripts/sandbox-roundtrip.ts",
     "wallet:purchase": "tsx scripts/wallet-purchase.ts",
     "anchor": "tsx scripts/anchor.ts",
-    "smoke:tsa": "tsx scripts/anchor.ts"
+    "smoke:tsa": "tsx scripts/anchor.ts",
+    "wallet2:create": "tsx scripts/wallet2.ts",
+    "wallet2:watch": "tsx scripts/wallet2.ts"
   },
   "dependencies": {
     "ag-charts-community": "^14.2.0",

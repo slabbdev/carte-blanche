@@ -7,6 +7,8 @@ export interface CreateOrderArgs {
   payee?: string;
   /** Deterministic per-logical-operation id; a retry reuses the same value. */
   requestId: string;
+  /** "card" funds sandbox orders with the test card; "wallet" requires buyer approval (human-in-the-loop). */
+  funding?: "card" | "wallet";
 }
 
 export interface OrderResult {
@@ -18,6 +20,8 @@ export interface CaptureResult {
   orderId: string;
   captureId: string;
   status: string;
+  /** Present when the buyer must approve first: the redirect URL for the human. */
+  approvalUrl?: string;
 }
 
 export type RailsMode = "mock" | "sandbox" | "live";
@@ -72,7 +76,8 @@ export class LiveRails implements PaymentRails {
     this.mode = client.env === "sandbox" ? "sandbox" : "live";
   }
   async createOrder(args: CreateOrderArgs): Promise<OrderResult> {
-    const paymentSource = this.sandboxFunding ? sandboxTestCard(this.env) : undefined;
+    const wantsWallet = args.funding === "wallet";
+    const paymentSource = wantsWallet ? walletFunding() : this.sandboxFunding ? sandboxTestCard(this.env) : undefined;
     const res = await this.client.createOrder({ ...args, paymentSource });
     if (!res.ok) throw new Error(`PayPal createOrder failed (${res.status}): ${JSON.stringify(res.data).slice(0, 400)}`);
     return { id: res.data.id, status: res.data.status };
@@ -83,14 +88,17 @@ export class LiveRails implements PaymentRails {
       const capture = res.data.purchase_units?.[0]?.payments?.captures?.[0];
       return { orderId, captureId: capture?.id ?? "unknown", status: capture?.status ?? res.data.status };
     }
+    const data = res.data as { name?: string; details?: Array<{ issue?: string }> };
+    const issues = data.details?.map((d) => d.issue) ?? [];
+    // Buyer hasn't approved a wallet order yet — that is the human-in-the-loop
+    // step, not a failure: report the pending state plus the approval redirect.
+    if (issues.includes("ORDER_NOT_APPROVED") || data.name === "RESOURCE_NOT_FOUND") {
+      return { orderId, captureId: "", status: "PAYER_ACTION_REQUIRED", approvalUrl: approvalRedirect(orderId, this.client.env) };
+    }
     // Sandbox card flows can auto-capture at order creation. Instead of
     // crashing on ORDER_ALREADY_CAPTURED (the classic double-spend trap),
     // reconcile with PayPal's real state and return the actual capture.
-    const name = (res.data as { name?: string }).name;
-    const already = (res.data as { details?: Array<{ issue?: string }> }).details?.some(
-      (d) => d.issue === "ORDER_ALREADY_CAPTURED",
-    );
-    if (name === "UNPROCESSABLE_ENTITY" && already) {
+    if (data.name === "UNPROCESSABLE_ENTITY" && issues.includes("ORDER_ALREADY_CAPTURED")) {
       const order = await this.client.getOrder(orderId);
       if (!order.ok) throw new Error(`PayPal getOrder failed while reconciling: ${JSON.stringify(order.data).slice(0, 200)}`);
       const capture = order.data.purchase_units?.[0]?.payments?.captures?.[0];
@@ -99,6 +107,24 @@ export class LiveRails implements PaymentRails {
     }
     throw new Error(`PayPal captureOrder failed (${res.status}): ${JSON.stringify(res.data).slice(0, 400)}`);
   }
+}
+
+/** Buyer approval redirect for a wallet-funded order (works in sandbox and live). */
+export function approvalRedirect(orderId: string, env: string): string {
+  const host = env === "live" ? "www.paypal.com" : "www.sandbox.paypal.com";
+  return `https://${host}/checkoutnow?token=${orderId}`;
+}
+
+/** Wallet funding: PayPal balance/wallet with the buyer action preset to PAY NOW. */
+export function walletFunding(): Record<string, unknown> {
+  return {
+    paypal: {
+      experience_context: {
+        user_action: "PAY_NOW",
+        shipping_preference: "NO_SHIPPING",
+      },
+    },
+  };
 }
 
 /** PayPal sandbox test card (funds orders without buyer approval) — number overridable via env. */

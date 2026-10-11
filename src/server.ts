@@ -158,9 +158,32 @@ app.post("/api/agent/purchase", async (req, res) => {
       payee: body.payee,
       logicalKey: body.logical_key,
     });
+    if (outcome.kind === "pending") {
+      return res.json({
+        outcome: "pending",
+        logicalKey: outcome.logicalKey,
+        orderId: outcome.orderId,
+        approvalUrl: outcome.approvalUrl,
+        note: "wallet order awaiting buyer approval at the redirect; POST /api/agent/purchase/resume with logicalKey once approved",
+      });
+    }
     res.json(outcome.kind === "receipt" ? { outcome: "receipt", ...outcome.full } : { outcome: "denial", ...outcome.full });
   } catch (e) {
     res.status(502).json({ error: `rails failure: ${(e as Error).message}` });
+  }
+});
+
+app.post("/api/agent/purchase/resume", async (req, res) => {
+  const body = req.body as { logical_key?: string };
+  if (!body.logical_key) return res.status(400).json({ error: "logical_key is required" });
+  try {
+    const outcome = await enforcer.resumePurchase(body.logical_key);
+    if (outcome.kind === "pending") {
+      return res.status(409).json({ outcome: "pending", orderId: outcome.orderId, approvalUrl: outcome.approvalUrl });
+    }
+    res.json(outcome.kind === "receipt" ? { outcome: "receipt", ...outcome.full } : { outcome: "denial", ...outcome.full });
+  } catch (e) {
+    res.status(409).json({ error: (e as Error).message });
   }
 });
 

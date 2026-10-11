@@ -47,7 +47,8 @@ export interface PurchaseRequest {
 
 export type Outcome =
   | { kind: "receipt"; receipt: Receipt; full: FullReceipt }
-  | { kind: "denial"; denial: Denial; full: FullDenial };
+  | { kind: "denial"; denial: Denial; full: FullDenial }
+  | { kind: "pending"; logicalKey: string; mandateId: string; orderId: string; approvalUrl: string };
 
 interface StoredState {
   receipts: Receipt[];
@@ -236,6 +237,30 @@ export class Enforcer {
     });
 
     const capture = await this.rails.captureOrder(order.id, captureRequestId);
+    // Wallet orders stop here on purpose: the buyer (a human) must approve
+    // before money moves. Journal the pending position and hand back the
+    // approval redirect; resumePurchase() finishes after the human agrees.
+    if (capture.status === "PAYER_ACTION_REQUIRED") {
+      this.journal.append("order_awaiting_buyer", {
+        mandate_id: req.mandateId,
+        logical_key: logicalKey,
+        order_id: capture.orderId,
+        status: capture.status,
+        amount: req.amount,
+        amount_minor: amountMinor.toString(),
+        currency: req.currency,
+        rails_mode: this.rails.mode,
+        paypal_request_id: captureRequestId,
+      });
+      const outcome: Outcome = {
+        kind: "pending",
+        logicalKey,
+        mandateId: req.mandateId,
+        orderId: capture.orderId,
+        approvalUrl: capture.approvalUrl ?? "",
+      };
+      return outcome;
+    }
     const event = this.journal.append("order_captured", {
       mandate_id: req.mandateId,
       logical_key: logicalKey,
@@ -279,6 +304,76 @@ export class Enforcer {
 
     const full = this.assembleReceipt(receipt, signed);
     return { kind: "receipt", receipt, full };
+  }
+
+  /**
+   * Human-in-the-loop wallet flow, step two: the buyer approved at the
+   * redirect and the watcher calls back. The capture replays with the SAME
+   * deterministic PayPal-Request-Id (the order exists; PayPal idempotency
+   * makes the replay safe), the capture is journalled and the receipt
+   * commits to the whole story: mandate → intent → order → human approval →
+   * capture → TSA anchor.
+   */
+  async resumePurchase(logicalKey: string): Promise<Outcome> {
+    const done = this.memo.get(logicalKey);
+    if (done?.kind === "receipt") return done;
+    const events = this.journal.eventsFor((d) => d.logical_key === logicalKey);
+    const created = events.find((e) => e.type === "order_created");
+    const awaiting = [...events].reverse().find((e) => e.type === "order_awaiting_buyer");
+    if (!created || !awaiting) throw new Error(`no pending wallet purchase for logical key ${logicalKey}`);
+    const createdData = created.data as Record<string, unknown>;
+    const awaitingData = awaiting.data as Record<string, unknown>;
+    const mandateId = String(createdData.mandate_id);
+    const signed = this.store.get(mandateId);
+    if (!signed) throw new Error(`mandate ${mandateId} not found while resuming ${logicalKey}`);
+    const requested = events.find((e) => e.type === "purchase_requested")?.data as Record<string, unknown> | undefined;
+    const captureRequestId = `cb-${logicalKey}-cp`;
+    const capture = await this.rails.captureOrder(String(awaitingData.order_id), captureRequestId);
+    if (capture.status === "PAYER_ACTION_REQUIRED") {
+      throw new Error("buyer has not approved yet — approve at the redirect and retry");
+    }
+    const event = this.journal.append("order_captured", {
+      mandate_id: mandateId,
+      logical_key: logicalKey,
+      order_id: capture.orderId,
+      capture_id: capture.captureId,
+      status: capture.status,
+      amount: String(awaitingData.amount),
+      amount_minor: String(awaitingData.amount_minor),
+      currency: String(awaitingData.currency),
+      rails_mode: this.rails.mode,
+      paypal_request_id: captureRequestId,
+    });
+    const receipt: Receipt = {
+      receiptId: newReceiptId(logicalKey),
+      mandateId,
+      logicalKey,
+      createdAt: event.ts,
+      amount: String(awaitingData.amount),
+      currency: String(awaitingData.currency),
+      description: String(requested?.description ?? ""),
+      ...(requested?.payee ? { payee: String(requested.payee) } : {}),
+      orderId: capture.orderId,
+      captureId: capture.captureId,
+      status: capture.status,
+      chainTip: this.journal.tip(),
+      journalLength: this.journal.length,
+    };
+    this.receipts.set(receipt.receiptId, receipt);
+    this.persist();
+
+    if (this.tsa) {
+      try {
+        await this.journal.anchorTreeHead(this.tsa);
+      } catch {
+        /* anchoring is additive evidence, never a gate */
+      }
+    }
+
+    const full = this.assembleReceipt(receipt, signed);
+    const outcome: Outcome = { kind: "receipt", receipt, full };
+    this.memo.set(logicalKey, outcome);
+    return outcome;
   }
 
   private assembleReceipt(receipt: Receipt, signed: SignedMandate): FullReceipt {

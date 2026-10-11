@@ -155,6 +155,22 @@ src/
 | `GET /api/journal/verify` | chain integrity |
 | `GET /healthz` | liveness + rails mode |
 
+## Human-in-the-loop wallet purchases (v0.5)
+
+Card-funded sandbox orders auto-capture; **wallet orders stop at `PAYER_ACTION_REQUIRED`** —
+the buyer (a human) must approve. The enforcer journals the pending position
+(`order_awaiting_buyer`) and returns the approval redirect; when the human agrees,
+`resumePurchase()` replays the capture with the **same deterministic PayPal-Request-Id**
+(PayPal idempotency makes the replay safe), journals the capture and issues the receipt.
+The chain then spans the whole story — *mandate → intent → order → human approval → capture* —
+which is exactly the human-approval hook PayPal's own agent toolkit lacks.
+
+```
+npm run wallet2:create        # journalled intent + order, prints the approval link
+# ... the buyer clicks "Agree & Pay" at the link ...
+npm run wallet2:watch -- --logical-key <key>   # capture + receipt when approved
+```
+
 ## Security model (v0, stated plainly)
 
 - The server acts as **custodial principal** (it signs mandates with its own key). Non-custodial
