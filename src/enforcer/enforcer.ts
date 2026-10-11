@@ -3,6 +3,7 @@ import { sha256Hex } from "../lib/sign.js";
 import { loadJson, saveJson } from "../lib/persist.js";
 import type { Keys } from "../lib/keys.js";
 import type { Journal } from "../journal/journal.js";
+import type { TsaClient } from "../journal/tsa.js";
 import type { MandateStore } from "../mandate/store.js";
 import { formatAmount, parseAmount, type SignedMandate } from "../mandate/mandate.js";
 import { verifyMandate } from "../mandate/signing.js";
@@ -67,13 +68,17 @@ export class Enforcer {
   private readonly denials = new Map<string, Denial>();
   private readonly memo = new Map<string, Outcome>();
 
+  private readonly tsa?: TsaClient;
+
   constructor(
     private readonly journal: Journal,
     private readonly store: MandateStore,
     private readonly rails: PaymentRails,
     private readonly keys: Keys,
     private readonly stateDir: string,
+    options?: { tsa?: TsaClient },
   ) {
+    this.tsa = options?.tsa;
     const state = loadJson<StoredState>(
       `${stateDir}/outcomes.json`,
       { receipts: [], denials: [] },
@@ -262,6 +267,16 @@ export class Enforcer {
     this.receipts.set(receipt.receiptId, receipt);
     this.persist();
 
+    // Best-effort anchor: a slow or unreachable TSA must never block a
+    // purchase — the receipt simply ships without the tsa_anchor check.
+    if (this.tsa) {
+      try {
+        await this.journal.anchorTreeHead(this.tsa);
+      } catch {
+        /* anchoring is additive evidence, never a gate */
+      }
+    }
+
     const full = this.assembleReceipt(receipt, signed);
     return { kind: "receipt", receipt, full };
   }
@@ -271,13 +286,17 @@ export class Enforcer {
       (d) => d.logical_key === receipt.logicalKey && d.mandate_id === receipt.mandateId,
     );
     const captured = events.find((e) => e.type === "order_captured");
-    const inclusion = captured
-      ? {
-          seq: captured.seq,
-          proof: this.journal.inclusionProofForSeq(captured.seq),
-          treeHead: this.journal.signedTreeHead(),
-        }
-      : undefined;
+    let inclusion: FullReceipt["inclusion"];
+    if (captured) {
+      const treeHead = this.journal.signedTreeHead();
+      const anchor = this.journal.anchorForSize(treeHead.size);
+      inclusion = {
+        seq: captured.seq,
+        proof: this.journal.inclusionProofForSeq(captured.seq),
+        treeHead,
+        ...(anchor ? { anchor } : {}),
+      };
+    }
     return {
       receipt: { ...receipt },
       mandate: signed.mandate,

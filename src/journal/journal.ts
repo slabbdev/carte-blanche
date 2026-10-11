@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex, signCanonical } from "../lib/sign.js";
 import { buildMerkleTree, inclusionProof, merkleLeafHash, type MerkleInclusionProof, type MerkleTree } from "./merkle.js";
+import type { TsaClient } from "./tsa.js";
 
 const GENESIS_HASH = sha256Hex("carte-blanche/journal/genesis/v1");
 
@@ -36,6 +37,24 @@ export interface SignedTreeHead {
   timestamp: string;
   signature: string;
   publicKey: string;
+}
+
+/**
+ * Independent witness over a tree position: an RFC 3161 token from a
+ * Timestamp Authority covers the root, so even someone holding OUR keys
+ * cannot backdate or reorder the chain without breaking the TSA's word.
+ */
+export interface TreeHeadAnchor {
+  tsaUrl: string;
+  nonce: string;
+  genTime: string;
+  status: number;
+  /** The original RFC 3161 request — third parties verify with `openssl ts -verify -queryfile`. */
+  requestB64: string;
+  tokenB64: string;
+  root: string;
+  size: number;
+  anchoredAt: string;
 }
 
 /**
@@ -108,6 +127,7 @@ export class Journal {
   }
 
   private sthCache: { size: number; sth: SignedTreeHead } | undefined;
+  private readonly anchorCache = new Map<number, TreeHeadAnchor>();
 
   /** Signed tree head over the whole chain — cached per size so a given tree always yields the same STH. */
   signedTreeHead(): SignedTreeHead {
@@ -122,6 +142,61 @@ export class Journal {
     };
     this.sthCache = { size: tree.leafCount, sth };
     return sth;
+  }
+
+  /** Anchor the current tree position with the TSA (one call per size, cached). */
+  async anchorTreeHead(tsa: TsaClient): Promise<TreeHeadAnchor> {
+    const sth = this.signedTreeHead();
+    const cached = this.anchorCache.get(sth.size);
+    if (cached) return cached;
+    const { url, nonce, info, requestB64 } = await tsa.timestamp(sth.root);
+    const anchor: TreeHeadAnchor = {
+      tsaUrl: url,
+      nonce,
+      genTime: info.genTimeIso,
+      status: info.status,
+      requestB64,
+      tokenB64: info.tokenB64,
+      root: sth.root,
+      size: sth.size,
+      anchoredAt: new Date().toISOString(),
+    };
+    this.anchorCache.set(anchor.size, anchor);
+    // The anchor rides in the chain itself: the journal records that an
+    // external authority vouched for this exact position.
+    this.append("sth_anchored", {
+      size: anchor.size,
+      root: anchor.root,
+      tsa_url: anchor.tsaUrl,
+      nonce: anchor.nonce,
+      gen_time: anchor.genTime,
+      request_b64: anchor.requestB64,
+      token_b64: anchor.tokenB64,
+    });
+    return anchor;
+  }
+
+  /** Sync lookup for receipt assembly: the anchor for an already-anchored size. */
+  anchorForSize(size: number): TreeHeadAnchor | undefined {
+    return this.anchorCache.get(size);
+  }
+
+  /** Latest journalled anchor (survives restarts — read from the chain). */
+  latestAnchor(): TreeHeadAnchor | undefined {
+    const event = [...this.events].reverse().find((e) => e.type === "sth_anchored");
+    if (!event) return undefined;
+    const d = event.data as Record<string, string | number>;
+    return {
+      tsaUrl: String(d.tsa_url),
+      nonce: String(d.nonce),
+      genTime: String(d.gen_time),
+      status: 0,
+      requestB64: String(d.request_b64),
+      tokenB64: String(d.token_b64),
+      root: String(d.root),
+      size: Number(d.size),
+      anchoredAt: event.ts,
+    };
   }
 
   get length(): number {

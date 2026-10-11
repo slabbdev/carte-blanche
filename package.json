@@ -14,7 +14,9 @@
     "demo": "tsx src/agent/demo.ts",
     "demo:llm": "tsx src/agent/llm.ts",
     "roundtrip:sandbox": "tsx scripts/sandbox-roundtrip.ts",
-    "wallet:purchase": "tsx scripts/wallet-purchase.ts"
+    "wallet:purchase": "tsx scripts/wallet-purchase.ts",
+    "anchor": "tsx scripts/anchor.ts",
+    "smoke:tsa": "tsx scripts/anchor.ts"
   },
   "dependencies": {
     "ag-grid-community": "^36.2.0",

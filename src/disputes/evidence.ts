@@ -106,6 +106,9 @@ function journalLinkedPurchase(
         seq: event.seq,
         proof: deps.journal.inclusionProofForSeq(event.seq),
         treeHead: deps.journal.signedTreeHead(),
+        ...(deps.journal.anchorForSize(deps.journal.signedTreeHead().size)
+          ? { anchor: deps.journal.anchorForSize(deps.journal.signedTreeHead().size) }
+          : {}),
       },
     };
   }

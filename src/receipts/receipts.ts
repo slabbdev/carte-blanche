@@ -1,7 +1,8 @@
 import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex, signCanonical, verifyCanonical } from "../lib/sign.js";
-import type { JournalEvent, SignedTreeHead } from "../journal/journal.js";
+import type { JournalEvent, SignedTreeHead, TreeHeadAnchor } from "../journal/journal.js";
 import { verifyMerkleInclusion, merkleLeafHash, type MerkleInclusionProof } from "../journal/merkle.js";
+import { parseTimestampResponse, verifyTimestampToken } from "../journal/tsa.js";
 import type { Mandate } from "../mandate/mandate.js";
 
 /** A completed, journalled, signed purchase. */
@@ -44,6 +45,8 @@ export interface ReceiptInclusion {
   seq: number;
   proof: MerkleInclusionProof;
   treeHead: SignedTreeHead;
+  /** Present when the tree head was anchored with an independent RFC 3161 authority. */
+  anchor?: TreeHeadAnchor;
 }
 
 /**
@@ -158,6 +161,28 @@ export function verifyFullReceipt(full: FullReceipt): VerificationReport {
       label: "Capture event committed by signed Merkle tree head (portable)",
       ok: inclusionOk,
       detail,
+    });
+  }
+
+  if (full.inclusion?.anchor) {
+    const anchor = full.inclusion.anchor;
+    const head = full.inclusion.treeHead;
+    const reasons: string[] = [];
+    if (anchor.root !== head.root) reasons.push("anchor root differs from the tree head");
+    // Re-run the RFC 3161 token self-check with this repo's own reader —
+    // full PKI chain validation remains the openssl one-liner in the README.
+    try {
+      const info = parseTimestampResponse(Buffer.from(anchor.tokenB64, "base64"));
+      const verdict = verifyTimestampToken({ imprintHex: head.root, nonceHex: anchor.nonce }, info);
+      reasons.push(...verdict.reasons);
+    } catch (err) {
+      reasons.push(`unreadable token: ${(err as Error).message}`);
+    }
+    checks.push({
+      id: "tsa_anchor",
+      label: "Tree head anchored by an independent RFC 3161 timestamp authority",
+      ok: reasons.length === 0,
+      detail: reasons.length ? reasons.join("; ") : `${anchor.tsaUrl} · anchored ${anchor.genTime}`,
     });
   }
 

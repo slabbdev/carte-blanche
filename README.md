@@ -99,8 +99,22 @@ longer just claims "these events happened", it *commits* to the entire append-on
 Scheme: CT-inspired padded Merkle tree, deliberately not RFC 6962 (documented in `src/journal/merkle.ts`).
 
 Still honest: the tree head is signed by *our* journal key, so it proves internal consistency and
-commitment — proving *when* (to a third party, without trusting us) is the RFC 3161 TSA anchor,
-next milestone.
+commitment. Proving *when* — to a third party, without trusting us — is the **RFC 3161 TSA anchor (v0.4)**:
+each tree head is timestamped by an independent Timestamp Authority (freeTSA by default), the
+request+token pair is journalled and served at `/api/journal/anchor.tsr` and `/api/journal/anchor.tsq`.
+Any third party re-verifies with plain openssl — no trust in us, no code from us:
+
+```
+curl -o anchor.tsr http://localhost:8790/api/journal/anchor.tsr
+curl -o anchor.tsq http://localhost:8790/api/journal/anchor.tsq
+curl -O https://freetsa.org/files/cacert.pem -O https://freetsa.org/files/tsa.crt
+openssl ts -verify -queryfile anchor.tsq -in anchor.tsr -CAfile cacert.pem -untrusted tsa.crt
+# → Verification: OK
+```
+
+So the full chain of custody is now: **signed mandate → journalled intent/execution → Merkle
+inclusion proof → signed tree head → TSA-sealed time**. A receipt proves not just what was spent,
+but when it was provably already recorded.
 
 ## Architecture
 
@@ -149,15 +163,16 @@ src/
 - Amounts are decimal strings compared in minor units (bigint) — no floats in the auth path.
 - Keys live in `KEYS_DIR` (0600), state in `STATE_DIR`; both are gitignored.
 - The journal detects any tampering (chain break) and **v0.3 receipts commit to the whole chain**
-  via Merkle inclusion proofs against signed tree heads; the journal key is still ours, so
-  third-party proof of *when* waits for the TSA anchor (S4b).
+  via Merkle inclusion proofs against signed tree heads. **v0.4 seals the *when***: tree heads are
+  RFC 3161-anchored by an independent TSA (freeTSA default, override with `TSA_URLS`); the
+  request/token pair is journalled and verifiable with plain openssl (commands above).
 
 ## Roadmap
 
 1. **S2 ✓** — merchant dispute cockpit (AG Grid): disputes list, 10-day deadlines, evidence packs.
-2. **S3** — exercise the flow against a live sandbox: SAMPLE disputes + `provide-evidence` round-trip, fulfillment evidence (Tracking API).
+2. **S3 ✓** — exercised end-to-end against the live sandbox: wallet purchase → buyer dispute → API → evidence pack (see `npm run roundtrip:sandbox`).
 3. **S4a ✓** — Merkle inclusion proofs + signed tree heads on every receipt (portable commitment).
-4. **S4b** — RFC 3161 TSA anchoring of tree heads (third-party *when*).
+4. **S4b ✓** — RFC 3161 TSA anchoring of tree heads (`npm run anchor`; openssl-verified by third parties).
 5. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.
 
 ## Status

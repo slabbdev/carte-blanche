@@ -16,6 +16,8 @@ import { loadEnvFile } from "./lib/env.js";
 
 loadEnvFile();
 
+import { TsaClient, parseTimestampResponse, verifyTimestampToken } from "./journal/tsa.js";
+
 const PORT = Number(process.env.PORT ?? 8790);
 const KEYS_DIR = process.env.KEYS_DIR ?? ".keys";
 const STATE_DIR = process.env.STATE_DIR ?? ".state";
@@ -26,7 +28,9 @@ const keys = loadOrCreateKeys(KEYS_DIR);
 const journal = new Journal(path.join(STATE_DIR, "journal.jsonl"), keys.journal);
 const store = new MandateStore(path.join(STATE_DIR, "mandates.json"));
 const rails = makeRails(process.env);
-const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR);
+// Third-party time anchoring is live-mode only: mock stays deterministic and offline.
+const tsa = rails.mode === "live" ? new TsaClient(process.env.TSA_URLS?.split(",")) : undefined;
+const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR, { tsa });
 const disputes = new DisputeService({
   railsMode: rails.mode,
   client: makePayPalClient(process.env),
@@ -196,6 +200,51 @@ app.get("/api/journal/verify", (_req, res) => {
 app.get("/api/journal/events", (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
   res.json({ events: journal.recent(limit) });
+});
+
+app.get("/api/journal/anchor", (_req, res) => {
+  const anchor = journal.latestAnchor();
+  if (!anchor) return res.json({ anchored: false });
+  // Re-run the repo's own RFC 3161 reader against the stored token so the
+  // reported status is computed, never trusted from write time.
+  let tokenOk = false;
+  let reasons: string[] = [];
+  try {
+    const info = parseTimestampResponse(Buffer.from(anchor.tokenB64, "base64"));
+    const verdict = verifyTimestampToken({ imprintHex: anchor.root, nonceHex: anchor.nonce }, info);
+    tokenOk = verdict.ok;
+    reasons = verdict.reasons;
+  } catch (e) {
+    reasons = [`unreadable token: ${(e as Error).message}`];
+  }
+  res.json({
+    anchored: true,
+    anchor,
+    tokenOk,
+    reasons,
+    chainCovers: journal.length >= anchor.size,
+    openssl: [
+      `curl -o anchor.tsr http://localhost:${PORT}/api/journal/anchor.tsr`,
+      `curl -o anchor.tsq http://localhost:${PORT}/api/journal/anchor.tsq`,
+      "curl -O https://freetsa.org/files/cacert.pem -O https://freetsa.org/files/tsa.crt",
+      "openssl ts -verify -queryfile anchor.tsq -in anchor.tsr \\",
+      "  -CAfile cacert.pem -untrusted tsa.crt",
+    ].join("\n"),
+  });
+});
+
+app.get("/api/journal/anchor.tsr", (_req, res) => {
+  const anchor = journal.latestAnchor();
+  if (!anchor) return res.status(404).json({ error: "journal has no anchor yet" });
+  res.set("Content-Type", "application/timestamp-reply");
+  res.send(Buffer.from(anchor.tokenB64, "base64"));
+});
+
+app.get("/api/journal/anchor.tsq", (_req, res) => {
+  const anchor = journal.latestAnchor();
+  if (!anchor?.requestB64) return res.status(404).json({ error: "journal has no anchored request yet" });
+  res.set("Content-Type", "application/timestamp-query");
+  res.send(Buffer.from(anchor.requestB64, "base64"));
 });
 
 // ---------------------------------------------------------------------------
