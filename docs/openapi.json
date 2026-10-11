@@ -1,0 +1,475 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Carte Blanche API",
+    "description": "Mandates and purchase notarization for AI agents on PayPal rails. Every purchase is checked against a signed spending mandate, executed with deterministic PayPal-Request-Ids, journalled in a tamper-evident chain, TSA-anchored, and answered with a signed receipt — or a signed refusal.",
+    "version": "0.5.0",
+    "contact": { "name": "Carte Blanche", "url": "https://github.com/slabbdev/carte-blanche" },
+    "license": { "name": "MIT" }
+  },
+  "servers": [{ "url": "http://localhost:8790", "description": "local" }],
+  "tags": [
+    { "name": "mandates", "description": "Issue, list and revoke spending mandates" },
+    { "name": "agent", "description": "The agent-facing purchase path (mandate check, execution, receipt)" },
+    { "name": "evidence", "description": "Receipts, refusals, portable verification, sealed journal" },
+    { "name": "merchant", "description": "Dispute cockpit and evidence packs" },
+    { "name": "catalog", "description": "Real-product catalog (Channel3) for the shopping scene" }
+  ],
+  "paths": {
+    "/api/mandates": {
+      "post": {
+        "tags": ["mandates"],
+        "summary": "Issue a signed spending mandate",
+        "description": "Mandates are immutable: limits (per-transaction cap, total cap, currency, payee allowlist, time window) are signed at creation and only revocation changes behaviour.",
+        "operationId": "createMandate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateMandateRequest" },
+              "example": {
+                "principal": "acme-corp",
+                "agent": "procurement-agent",
+                "purpose": "office supplies",
+                "currency": "USD",
+                "max_per_transaction": "30.00",
+                "max_total_spend": "60.00",
+                "window_end": "2026-10-13T00:00:00.000Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The mandate with its Ed25519 signature and public key",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SignedMandate" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/mandates": {
+      "get": {
+        "tags": ["mandates"],
+        "summary": "List mandates",
+        "operationId": "listMandates",
+        "responses": {
+          "200": {
+            "description": "All mandates with their revocation status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mandates": { "type": "array", "items": { "$ref": "#/components/schemas/SignedMandate" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mandates/{id}/revoke": {
+      "post": {
+        "tags": ["mandates"],
+        "summary": "Revoke a mandate",
+        "description": "Revocation is the only exit after issuance; it is journalled like every other event.",
+        "operationId": "revokeMandate",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "reason": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Revocation recorded and journalled" }
+        }
+      }
+    },
+    "/api/agent/purchase": {
+      "post": {
+        "tags": ["agent"],
+        "summary": "Attempt a purchase under a mandate",
+        "description": "The exact call an LLM agent's purchase() tool makes. Checks the mandate (amount, currency, payee, window, cumulative cap), executes with a deterministic PayPal-Request-Id, journals every step, and answers with a signed receipt — or a signed refusal with the precise reason. Wallet-funded orders stop at PAYER_ACTION_REQUIRED and return the buyer approval redirect (two-phase, human-in-the-loop).",
+        "operationId": "attemptPurchase",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PurchaseRequest" },
+              "example": {
+                "mandate_id": "cbmd-639347ac-5406-4ee7-9d47-c14b5d081227",
+                "amount": "15.00",
+                "currency": "USD",
+                "description": "office coffee, 1kg",
+                "funding": "card"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Receipt (captured), refusal (checked and stopped) or pending (awaiting buyer approval)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PurchaseOutcome" },
+                "examples": {
+                  "receipt": { "value": { "outcome": "receipt", "receiptId": "rcpt-b4405a3bb34dc4d5", "orderId": "08M580282K766080S", "captureId": "2MU190003X6394442", "status": "COMPLETED", "amount": "15.00", "currency": "USD", "chainTip": "277b3550…" } },
+                  "refusal": { "value": { "outcome": "denial", "reasonCode": "OVER_PER_TRANSACTION", "reasonDetail": "requested 45.00 exceeds per-transaction cap 30.00" } },
+                  "pending": { "value": { "outcome": "pending", "logicalKey": "c4b71622…", "orderId": "23335628N13725310", "approvalUrl": "https://www.sandbox.paypal.com/checkoutnow?token=23335628N13725310" } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/agent/purchase/resume": {
+      "post": {
+        "tags": ["agent"],
+        "summary": "Resume a wallet purchase after buyer approval",
+        "description": "Replays the capture with the same deterministic PayPal-Request-Id (idempotent), journals the capture and issues the receipt.",
+        "operationId": "resumePurchase",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["logical_key"], "properties": { "logical_key": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Receipt issued", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PurchaseOutcome" } } } },
+          "409": { "description": "Buyer has not approved yet, or no pending order for that key" }
+        }
+      }
+    },
+    "/api/receipts": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "List receipts and refusals",
+        "operationId": "listReceipts",
+        "responses": {
+          "200": {
+            "description": "Receipts and signed refusals, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "receipts": { "type": "array", "items": { "$ref": "#/components/schemas/Receipt" } },
+                    "denials": { "type": "array", "items": { "$ref": "#/components/schemas/Denial" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/verify/receipts/{id}": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Verify a full receipt bundle",
+        "description": "Re-runs every check server-side: mandate signature, event re-hash, receipt-to-event linkage, receipt signature, Merkle inclusion against the signed tree head, and the RFC 3161 TSA anchor when present.",
+        "operationId": "verifyReceipt",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "Verification report with per-check results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "report": { "$ref": "#/components/schemas/VerificationReport" },
+                    "chain": { "$ref": "#/components/schemas/ChainVerification" },
+                    "full": { "type": "object", "description": "The full bundle: receipt, mandate, signatures, raw events, Merkle inclusion proof, TSA anchor" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/verify/denials/{id}": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Verify a signed refusal bundle",
+        "operationId": "verifyDenial",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Verification report" } }
+      }
+    },
+    "/api/journal/verify": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Verify the whole journal chain",
+        "description": "Re-hashes every event and walks the SHA-256 chain from genesis; returns the broken position if any tamper is detected.",
+        "operationId": "verifyJournal",
+        "responses": {
+          "200": {
+            "description": "Chain verification + latest signed checkpoint",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChainVerification" } } }
+          }
+        }
+      }
+    },
+    "/api/journal/events": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Recent journal events",
+        "operationId": "listEvents",
+        "parameters": [{ "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } }],
+        "responses": { "200": { "description": "Newest events first" } }
+      }
+    },
+    "/api/journal/anchor": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Latest RFC 3161 anchor of the tree head",
+        "description": "Returns the anchor with a live self-check (token imprint + nonce re-verified), plus the exact openssl commands for fully independent third-party verification.",
+        "operationId": "journalAnchor",
+        "responses": { "200": { "description": "Anchor status + token metadata + openssl instructions" } }
+      }
+    },
+    "/api/journal/anchor.tsr": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Download the raw TimeStampResp",
+        "description": "The full RFC 3161 response from the Timestamp Authority, served for independent verification (openssl ts -verify -queryfile anchor.tsq -in anchor.tsr).",
+        "operationId": "journalAnchorToken",
+        "responses": { "200": { "description": "application/timestamp-reply bytes", "content": { "application/timestamp-reply": { "schema": { "type": "string", "format": "binary" } } } } }
+      }
+    },
+    "/api/journal/anchor.tsq": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Download the original TimeStampReq",
+        "operationId": "journalAnchorRequest",
+        "responses": { "200": { "description": "application/timestamp-query bytes" } }
+      }
+    },
+    "/api/catalog": {
+      "get": {
+        "tags": ["catalog"],
+        "summary": "Search the product catalog",
+        "description": "Backed by Channel3 (100M+ retail offers) when CHANNEL3_API_KEY is set; otherwise serves clearly-labeled sample products so the demo works offline.",
+        "operationId": "searchCatalog",
+        "parameters": [{ "name": "q", "in": "query", "schema": { "type": "string" }, "example": "merino wool sweater" }],
+        "responses": {
+          "200": {
+            "description": "Products with source label",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": { "type": "string", "enum": ["channel3", "sample"] },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "title": { "type": "string" },
+                          "price": { "type": "string", "description": "decimal string the mandate will pin" },
+                          "currency": { "type": "string" },
+                          "image": { "type": "string" },
+                          "website": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/disputes": {
+      "get": {
+        "tags": ["merchant"],
+        "summary": "List disputes (PayPal Disputes API)",
+        "operationId": "listDisputes",
+        "responses": { "200": { "description": "Dispute rows with deadline, receipt linkage and source" } }
+      }
+    },
+    "/api/disputes/{id}/evidence-pack": {
+      "get": {
+        "tags": ["merchant"],
+        "summary": "Build the dispute evidence pack",
+        "description": "Assembles from the sealed journal: the signed mandate, the receipt, the verified chain, the Merkle inclusion proof of the capture event, signed refusals on the mandate, and the TSA anchor.",
+        "operationId": "evidencePack",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Structured pack + markdown rendering" } }
+      }
+    },
+    "/api/disputes/{id}/submit-evidence": {
+      "post": {
+        "tags": ["merchant"],
+        "summary": "Submit the evidence pack to PayPal",
+        "description": "POSTs the pack through the Disputes API provide-evidence path. Sandbox reality: the endpoint is file-upload-only with a documents scope gated by an account manager — the submission attempt and its outcome are reported honestly.",
+        "operationId": "submitEvidence",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Submission attempt result with PayPal's own response" } }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["evidence"],
+        "summary": "Liveness",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Rails mode, journal length, catalog mode, uptime",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed request",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "CreateMandateRequest": {
+        "type": "object",
+        "required": ["principal", "agent", "currency", "max_per_transaction", "max_total_spend"],
+        "properties": {
+          "principal": { "type": "string", "description": "Who grants the mandate" },
+          "agent": { "type": "string", "description": "Who spends under it" },
+          "purpose": { "type": "string" },
+          "currency": { "type": "string", "description": "ISO 4217; the mandate's single denomination" },
+          "max_per_transaction": { "type": "string", "description": "Decimal amount, e.g. \"30.00\"" },
+          "max_total_spend": { "type": "string" },
+          "payees": { "type": "array", "items": { "type": "string" }, "description": "Optional allowlist" },
+          "window_end": { "type": "string", "format": "date-time", "description": "Window opens at issuance" }
+        }
+      },
+      "SignedMandate": {
+        "type": "object",
+        "properties": {
+          "mandate": { "type": "object" },
+          "signature": { "type": "string", "description": "Ed25519 over the canonical JSON of the mandate" },
+          "publicKey": { "type": "string", "description": "Base64 SPKI of the custodial principal key" }
+        }
+      },
+      "PurchaseRequest": {
+        "type": "object",
+        "required": ["mandate_id", "amount", "currency", "description"],
+        "properties": {
+          "mandate_id": { "type": "string" },
+          "amount": { "type": "string", "description": "Decimal amount in the mandate's currency" },
+          "currency": { "type": "string" },
+          "description": { "type": "string" },
+          "payee": { "type": "string" },
+          "logical_key": { "type": "string", "description": "Business-level idempotency: same key, same outcome, one PayPal side effect" },
+          "funding": { "type": "string", "enum": ["card", "wallet"], "description": "wallet = two-phase with buyer approval" }
+        }
+      },
+      "PurchaseOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "outcome": { "type": "string", "enum": ["receipt"] },
+              "receipt": { "type": "object" },
+              "inclusion": { "type": "object", "description": "Merkle inclusion proof against the signed tree head" }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": { "type": "string", "enum": ["denial"] },
+              "reasonCode": { "type": "string", "enum": ["MANDATE_NOT_FOUND", "MANDATE_TAMPERED", "MANDATE_REVOKED", "WINDOW_NOT_OPEN", "WINDOW_EXPIRED", "CURRENCY_MISMATCH", "OVER_PER_TRANSACTION", "OVER_TOTAL_CAP", "PAYEE_NOT_ALLOWED", "INVALID_AMOUNT"] },
+              "reasonDetail": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": { "type": "string", "enum": ["pending"] },
+              "logicalKey": { "type": "string" },
+              "orderId": { "type": "string" },
+              "approvalUrl": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "receiptId": { "type": "string" },
+          "mandateId": { "type": "string" },
+          "logicalKey": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "amount": { "type": "string" },
+          "currency": { "type": "string" },
+          "description": { "type": "string" },
+          "orderId": { "type": "string" },
+          "captureId": { "type": "string" },
+          "status": { "type": "string" },
+          "chainTip": { "type": "string" },
+          "journalLength": { "type": "integer" }
+        }
+      },
+      "Denial": {
+        "type": "object",
+        "properties": {
+          "denialId": { "type": "string" },
+          "mandateId": { "type": "string" },
+          "reasonCode": { "type": "string" },
+          "reasonDetail": { "type": "string" },
+          "chainTip": { "type": "string" },
+          "journalLength": { "type": "integer" }
+        }
+      },
+      "VerificationReport": {
+        "type": "object",
+        "properties": {
+          "subject": { "type": "string", "enum": ["receipt", "denial"] },
+          "id": { "type": "string" },
+          "overall": { "type": "boolean" },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "description": "mandate_signature | event_hashes | receipt_matches_events | receipt_signature | merkle_inclusion | tsa_anchor" },
+                "label": { "type": "string" },
+                "ok": { "type": "boolean" },
+                "detail": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "ChainVerification": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "length": { "type": "integer" },
+          "tip": { "type": "string" },
+          "brokenAt": { "type": "integer", "description": "Present when tampering is detected" }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "rails": { "type": "string", "enum": ["mock", "sandbox", "live"] },
+          "journalLength": { "type": "integer" },
+          "catalog": { "type": "string", "enum": ["channel3", "sample"] },
+          "uptimeSec": { "type": "integer" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } }
+      }
+    }
+  }
+}

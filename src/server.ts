@@ -340,6 +340,15 @@ app.get("/dashboard", (_req, res) => {
   res.sendFile(path.join(webRoot, "dashboard.html"));
 });
 
+// Machine-readable API contract (APIMatic/Redoc/Postman can consume it as-is).
+app.get("/openapi.json", (_req, res) => {
+  res.sendFile(path.join(repoRoot, "docs", "openapi.json"));
+});
+
+app.get("/docs", (_req, res) => {
+  res.sendFile(path.join(webRoot, "docs.html"));
+});
+
 app.get("/api/disputes", async (_req, res) => {
   try {
     res.json({ source: disputes.source, disputes: await disputes.list() });
