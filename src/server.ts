@@ -223,14 +223,14 @@ app.get("/api/disputes/:id", async (req, res) => {
 app.get("/api/disputes/:id/evidence-pack", async (req, res) => {
   const d = await disputes.get(req.params.id).catch(() => undefined);
   if (!d) return res.status(404).json({ error: "dispute not found" });
-  const pack = buildEvidencePack(d, { enforcer, journal, store });
+  const pack = buildEvidencePack(d, { enforcer, journal, store, keys });
   res.json({ pack, markdown: toMarkdown(pack) });
 });
 
 app.post("/api/disputes/:id/submit-evidence", async (req, res) => {
   const d = await disputes.get(req.params.id).catch(() => undefined);
   if (!d) return res.status(404).json({ error: "dispute not found" });
-  const pack = buildEvidencePack(d, { enforcer, journal, store });
+  const pack = buildEvidencePack(d, { enforcer, journal, store, keys });
   const result = await disputes.submitEvidence(d.disputeId, toProvideEvidenceEntries(pack), toMarkdown(pack));
   journal.append("evidence_submitted", {
     dispute_id: d.disputeId,

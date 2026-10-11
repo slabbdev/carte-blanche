@@ -1,9 +1,11 @@
 import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex } from "../lib/sign.js";
+import type { Keys } from "../lib/keys.js";
 import type { Enforcer } from "../enforcer/enforcer.js";
 import type { Journal, ChainVerification } from "../journal/journal.js";
 import type { MandateStore } from "../mandate/store.js";
-import type { Receipt } from "../receipts/receipts.js";
+import type { FullReceipt, Receipt } from "../receipts/receipts.js";
+import { newReceiptId, signReceipt } from "../receipts/receipts.js";
 import { denialsForMandate, type DisputeView } from "./service.js";
 
 /**
@@ -50,13 +52,80 @@ function packFileId(disputeId: string): string {
   return `pack-${disputeId.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/-+/g, "-").slice(0, 48)}`;
 }
 
+/**
+ * Journal fallback linkage: a wallet-funded purchase never became an Enforcer
+ * Receipt, but its capture is in the sealed journal. Match the dispute's
+ * transaction ids against order_captured events and reconstruct the receipt
+ * from journalled facts (mandate signed, chain intact — nothing invented).
+ */
+function journalLinkedPurchase(
+  dispute: DisputeView,
+  deps: { enforcer: Enforcer; journal: Journal; store: MandateStore; keys: Keys },
+): FullReceipt | undefined {
+  const ids = (dispute.disputedTransactions ?? [])
+    .map((t) => t.transaction_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (ids.length === 0) return undefined;
+  for (const event of deps.journal.eventsFor((d) => d.type === "order_captured")) {
+    const d = event.data as Record<string, unknown>;
+    const orderId = typeof d.order_id === "string" ? d.order_id : "";
+    const captureId = typeof d.capture_id === "string" ? d.capture_id : "";
+    if (!ids.includes(captureId) && !ids.includes(orderId)) continue;
+    const signed = deps.store.get(String(d.mandate_id ?? ""));
+    if (!signed) continue;
+    const logicalKey = String(d.logical_key ?? "");
+    const amount = typeof d.amount === "string" ? d.amount : dispute.amount ?? "0.00";
+    const currency = typeof d.currency === "string" ? d.currency : dispute.currency ?? "USD";
+    const receipt: Receipt = {
+      receiptId: newReceiptId(logicalKey || event.hash),
+      mandateId: signed.mandate.id,
+      logicalKey,
+      createdAt: event.ts,
+      amount,
+      currency,
+      description: typeof d.description === "string" ? d.description : "(journalled purchase)",
+      orderId,
+      captureId,
+      status: String(d.status ?? "COMPLETED"),
+      chainTip: deps.journal.tip(),
+      journalLength: deps.journal.length,
+    };
+    const events = deps.journal.eventsFor(
+      (x) => x.type !== "purchase_denied" && (x.data as Record<string, unknown>).logical_key === logicalKey,
+    );
+    return {
+      receipt,
+      mandate: signed.mandate,
+      mandateSignature: signed.signature,
+      mandatePublicKey: signed.publicKey,
+      events,
+      receiptSignature: signReceipt(receipt, deps.keys.server.privateKeyB64),
+      receiptPublicKey: deps.keys.server.publicKeyB64,
+      railsMode: "sandbox",
+      inclusion: {
+        seq: event.seq,
+        proof: deps.journal.inclusionProofForSeq(event.seq),
+        treeHead: deps.journal.signedTreeHead(),
+      },
+    };
+  }
+  return undefined;
+}
+
 export function buildEvidencePack(
   dispute: DisputeView,
-  deps: { enforcer: Enforcer; journal: Journal; store: MandateStore },
+  deps: { enforcer: Enforcer; journal: Journal; store: MandateStore; keys: Keys },
 ): EvidencePack {
   const { enforcer, journal, store } = deps;
-  const receipt = dispute.linkedReceiptId ? enforcer.listReceipts().find((r) => r.receiptId === dispute.linkedReceiptId) : undefined;
-  const full = receipt ? enforcer.fullReceipt(receipt.receiptId) : undefined;
+  let receipt = dispute.linkedReceiptId ? enforcer.listReceipts().find((r) => r.receiptId === dispute.linkedReceiptId) : undefined;
+  let full = receipt ? enforcer.fullReceipt(receipt.receiptId) : undefined;
+  if (!full) {
+    const linked = journalLinkedPurchase(dispute, deps);
+    if (linked) {
+      full = linked;
+      receipt = linked.receipt;
+    }
+  }
   const denials = denialsForMandate(enforcer, receipt);
 
   const pending: string[] = [];

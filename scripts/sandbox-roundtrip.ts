@@ -128,7 +128,7 @@ async function main(): Promise<void> {
     step("3-5 · Pack preview (builds from the real capture)");
     const pack = buildEvidencePack(
       { disputeId: "preview", reason: "ITEM_NOT_RECEIVED", status: "preview", source: "paypal" },
-      { enforcer, journal, store },
+      { enforcer, journal, store, keys },
     );
     const file = `./${pack.packId}.md`;
     fs.writeFileSync(file, toMarkdown(pack));
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
 
   // 3) evidence pack from the sealed journal
   step("3 · Evidence pack generated from the sealed journal");
-  const pack = buildEvidencePack(view, { enforcer, journal, store });
+  const pack = buildEvidencePack(view, { enforcer, journal, store, keys });
   info(`pack ${pack.packId} · chain: ${pack.chain.ok ? "OK" : "BROKEN"} · ${pack.enforcement.signedRefusals.length} signed refusals on mandate`);
   fs.writeFileSync(`./${pack.packId}.md`, toMarkdown(pack));
   info(`markdown written to ./${pack.packId}.md`);
