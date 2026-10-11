@@ -201,6 +201,14 @@ function applyDisputes(rows) {
   const has = unique.size > 0;
   $("empty").style.display = has ? "none" : "block";
   $("grid").style.display = has ? "block" : "none";
+  // An operator lands on the hottest case: auto-open the most urgent open
+  // dispute (smallest days-left) the first time the table fills.
+  if (!CURRENT && has) {
+    const hottest = [...unique.values()]
+      .filter((d) => d.respondBy)
+      .sort((a, b) => Date.parse(a.respondBy) - Date.parse(b.respondBy))[0];
+    if (hottest) selectDispute(hottest); // sets CURRENT itself
+  }
 }
 
 function pulseLive() {

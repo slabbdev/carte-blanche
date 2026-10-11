@@ -79,7 +79,7 @@
       <div><label>Payee allowlist (comma-separated, empty = any)</label><input id="m-payees" placeholder="store@example.com" /></div>
     </div>
     <div class="row" style="margin-top:14px">
-      <button id="create">Grant mandate</button>
+      <button id="m-create">Grant mandate</button>
       <span class="muted" style="font-size:12px">Ed25519-signed at creation. Immutable afterwards — revocation is the only exit.</span>
     </div>
   </section>
@@ -101,6 +101,12 @@
       <div style="width:110px"><label>Amount</label><input id="a-amount" value="25.00" /></div>
       <div style="flex:1;min-width:200px"><label>What for</label><input id="a-desc" value="coffee beans for the team" /></div>
       <div style="width:170px"><label>Payee (optional)</label><input id="a-payee" placeholder="leave empty" /></div>
+      <div style="width:190px"><label>Funding</label>
+        <select id="a-funding">
+          <option value="card">card — auto-capture</option>
+          <option value="wallet">wallet — human approves</option>
+        </select>
+      </div>
       <button id="buy">Attempt purchase</button>
     </div>
     <div class="outcome" id="outcome"></div>
@@ -158,7 +164,10 @@ async function refreshJournal() {
 async function refreshMandates() {
   const list = await api("/api/mandates");
   const sel = $("a-mandate");
+  const previous = sel.value;
   sel.innerHTML = '<option value="">—</option>' + list.map((m) => `<option value="${esc(m.mandate.id)}">${esc(m.mandate.id)}</option>`).join("");
+  // keep the operator's selection; default to the newest active mandate
+  sel.value = list.some((m) => m.mandate.id === previous) ? previous : (list[0]?.mandate.id ?? "");
   $("mandates").innerHTML = list.length === 0 ? '<div class="empty">none yet</div>' : list.map((m) => `
     <div class="card-item">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -191,7 +200,7 @@ async function refreshOutcomes() {
     </div>`).join("");
 }
 
-$("create").onclick = async () => {
+$("m-create").onclick = async () => {
   try {
     const payees = $("m-payees").value.split(",").map((s) => s.trim()).filter(Boolean);
     await api("/api/mandates", {
@@ -271,8 +280,14 @@ $("buy").onclick = async () => {
         currency: "USD",
         description: $("a-desc").value,
         payee: $("a-payee").value || undefined,
+        funding: $("a-funding").value,
       }),
     });
+    if (data.outcome === "pending") {
+      box.className = "outcome";
+      box.innerHTML = `<b style="color:var(--amber)">AWAITING BUYER</b> order <span class="mono">${esc(data.orderId)}</span> is journalled — <a href="${esc(data.approvalUrl)}" target="_blank" rel="noopener">approve at PayPal →</a><div class="muted" style="margin-top:6px">the human approval becomes part of the chain; <code>resume</code> completes the capture once approved</div>`;
+      return;
+    }
     const isR = data.outcome === "receipt";
     box.className = `outcome ${isR ? "receipt" : "denial"}`;
     const id = isR ? data.receipt.receiptId : data.denial.denialId;
