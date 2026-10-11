@@ -11,6 +11,7 @@ import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
 import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
+import { Channel3Catalog } from "./catalog/channel3.js";
 
 import { loadEnvFile } from "./lib/env.js";
 
@@ -31,6 +32,9 @@ const rails = makeRails(process.env);
 // Third-party time anchoring is live-mode only: mock stays deterministic and offline.
 const tsa = rails.mode === "live" ? new TsaClient(process.env.TSA_URLS?.split(",")) : undefined;
 const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR, { tsa });
+// Real-product catalog (Channel3 sponsor): without an API key it serves
+// clearly-labeled sample products so the shopping scene still works offline.
+const catalog = new Channel3Catalog(process.env.CHANNEL3_API_KEY);
 const disputes = new DisputeService({
   railsMode: rails.mode,
   client: makePayPalClient(process.env),
@@ -45,7 +49,16 @@ app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-c
 app.use("/vendor/charts", express.static(path.join(repoRoot, "node_modules", "ag-charts-community", "dist", "umd")));
 
 app.get("/healthz", (_req, res) => {
-  res.json({ ok: true, rails: rails.mode, journalLength: journal.length, uptimeSec: Math.round(process.uptime()) });
+  res.json({ ok: true, rails: rails.mode, journalLength: journal.length, catalog: catalog.enabled ? "channel3" : "sample", uptimeSec: Math.round(process.uptime()) });
+});
+
+app.get("/api/catalog", async (req, res) => {
+  const q = String(req.query.q ?? "").slice(0, 120);
+  try {
+    res.json(await catalog.search(q));
+  } catch (e) {
+    res.status(502).json({ error: `catalog unavailable: ${(e as Error).message}` });
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,11 @@
   .pill.no { background: rgba(248, 113, 113, 0.12); color: var(--red); }
   .pill.warn { background: rgba(251, 191, 36, 0.12); color: var(--amber); }
   .pill.mock { background: rgba(139, 152, 169, 0.15); color: var(--muted); }
+  .pill.paypal { background: rgba(96, 165, 250, 0.14); color: var(--blue); }
+  .product { display: flex; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; cursor: pointer; }
+  .product:hover { border-color: #3b4a5f; background: rgba(255,255,255,0.02); }
+  .product img { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: #fff; }
+  .product .ph { width: 44px; height: 44px; border-radius: 6px; background: var(--panel); }
   .outcome { border-radius: 10px; padding: 14px 16px; margin-top: 12px; font-size: 14px; display: none; }
   .outcome.receipt { border: 1px solid rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.06); }
   .outcome.denial { border: 1px solid rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.06); }
@@ -86,6 +91,11 @@
 
   <section>
     <h2>3 · Act as the agent</h2>
+    <div class="row" style="margin-bottom:10px">
+      <div style="flex:1"><label>Find a product</label><input id="cat-q" placeholder="search the catalog… (e.g. merino wool sweater)" /></div>
+      <button id="cat-search" class="ghost">Search catalog</button>
+    </div>
+    <div id="cat-results" style="display:none"></div>
     <div class="row">
       <div style="min-width:220px"><label>Mandate</label><select id="a-mandate"><option value="">—</option></select></div>
       <div style="width:110px"><label>Amount</label><input id="a-amount" value="25.00" /></div>
@@ -206,6 +216,44 @@ window.revoke = async (id) => {
   if (!confirm("Revoke this mandate? Agents are refused immediately after.")) return;
   await api(`/api/mandates/${id}/revoke`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "revoked from console" }) });
   await refreshMandates();
+};
+
+// --- real-product catalog (Channel3; sample products without an API key) -----
+$("cat-search").onclick = async () => {
+  const q = $("cat-q").value.trim();
+  const box = $("cat-results");
+  box.style.display = "block";
+  box.innerHTML = '<div class="empty">searching the catalog…</div>';
+  try {
+    const data = await api("/api/catalog?q=" + encodeURIComponent(q));
+    const pill = data.source === "channel3"
+      ? '<span class="pill paypal">CHANNEL3 LIVE</span>'
+      : '<span class="pill mock">SAMPLE (no API key)</span>';
+    if (!data.products.length) {
+      box.innerHTML = '<div class="empty">no product for that query</div>';
+      return;
+    }
+    box.innerHTML =
+      '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px">' + pill + " click a product to load it into the purchase below</div>" +
+      data.products.map((p) => `
+        <div class="product" data-id="${esc(p.id)}" data-title="${esc(p.title)}" data-price="${esc(p.price ?? "")}" data-currency="${esc(p.currency)}">
+          ${p.image ? `<img src="${esc(p.image)}" alt="" referrerpolicy="no-referrer" />` : '<div class="ph"></div>'}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.title)}</div>
+            <div style="font-size:12.5px;color:var(--muted)">${esc(p.price ?? "—")} ${esc(p.currency)}${p.website ? " · " + esc(p.website) : ""}</div>
+          </div>
+          <span style="color:var(--blue);font-size:12.5px">buy this →</span>
+        </div>`).join("");
+    box.querySelectorAll(".product").forEach((el) => {
+      el.onclick = () => {
+        const price = el.dataset.price;
+        $("a-amount").value = price || $("a-amount").value;
+        $("a-desc").value = el.dataset.title;
+      };
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="empty">catalog error: ' + esc(e.message) + "</div>";
+  }
 };
 
 $("buy").onclick = async () => {
