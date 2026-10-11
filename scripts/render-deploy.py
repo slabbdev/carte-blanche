@@ -20,7 +20,8 @@ def call(method: str, path: str, body: dict | None = None):
         method=method,
     )
     try:
-        return json.load(urllib.request.urlopen(req, timeout=60))
+        raw = urllib.request.urlopen(req, timeout=60).read()
+        return json.loads(raw) if raw.strip() else {}
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code} on {method} {path}: {e.read().decode()[:600]}", file=sys.stderr)
         sys.exit(1)
@@ -74,9 +75,25 @@ def main() -> None:
         print(f"created: {svc['id']}")
     svc_id = svc["id"]
 
-    deploy = call("POST", f"/services/{svc_id}/deploys", {})
-    deploy_id = deploy["id"]
-    print(f"deploy : {deploy_id}")
+    def unwrap_deploys(raw):
+        items = raw if isinstance(raw, list) else raw.get("deploys", [])
+        return [d.get("deploy", d) for d in items]
+
+    recent = call("GET", f"/services/{svc_id}/deploys?limit=5")
+    in_flight = [d for d in unwrap_deploys(recent)
+                 if d.get("status") in ("created", "build_in_progress", "update_in_progress", "pre_deploy_in_progress")]
+    if in_flight:
+        deploy_id = in_flight[0]["id"]
+        print(f"deploy : {deploy_id} (already in flight)")
+    else:
+        call("POST", f"/services/{svc_id}/deploys", {})
+        time.sleep(5)
+        deploys = unwrap_deploys(call("GET", f"/services/{svc_id}/deploys?limit=5"))
+        if not deploys:
+            print("no deploys visible after trigger")
+            sys.exit(1)
+        deploy_id = deploys[0]["id"]
+        print(f"deploy : {deploy_id} (newest)")
 
     for i in range(1, 41):
         time.sleep(12)
