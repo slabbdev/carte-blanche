@@ -1,18 +1,34 @@
+# Render Blueprint — one-click deploy of Carte Blanche.
+# The demo instance runs at https://carte-blanche-6jgo.onrender.com
+# (free plan: cold starts after 15 min idle, first request wakes it).
+#
+# This service is deliberately Render-native:
+#   - health checks on /healthz (rails mode + journal length + catalog mode)
+#   - auto-deploy on every commit to main
+#   - the sealed journal ships in-repo state; the TSA anchor endpoint
+#     (/api/journal/anchor.tsr|.tsq) is publicly verifiable with openssl
 services:
   - type: web
     name: carte-blanche
     runtime: node
     plan: free
+    region: frankfurt
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: PAYPAL_MODE
-        value: mock
+        value: sandbox
       - key: PAYPAL_ENV
         value: sandbox
+      - key: STATE_DIR
+        value: /var/data/carte-blanche # attach a Render disk to persist the journal
+      - key: CHANNEL3_URL
+        value: https://api.trychannel3.com
       # Set these in the Render dashboard (do not commit secrets):
-      # PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET  -> switches rails from mock to real sandbox
-      # OPENAI_API_KEY                           -> enables the live LLM agent
+      # PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET -> real sandbox rails
+      # CHANNEL3_API_KEY                        -> live product catalog
+      # TSA_URLS                                 -> alternate RFC 3161 authorities (comma-separated)

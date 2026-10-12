@@ -126,6 +126,14 @@ LLM agent ── tools ──►  Enforcer  ── mandate check ──►  PayP
                                      signed receipts / signed refusals ──► /verify/<id>
 ```
 
+### Deployed on Render
+
+The live demo runs on [Render](https://render.com) (Frankfurt, free plan):
+`https://carte-blanche-6jgo.onrender.com` — health-checked on `/healthz`,
+auto-deploying on every commit, infra-as-code via `render.yaml` (Blueprint).
+Attach a disk at `/var/data/carte-blanche` to persist the sealed journal
+across restarts; the TSA anchor endpoints stay publicly verifiable either way.
+
 ```
 src/
   lib/        canonical JSON, Ed25519, keys, atomic JSON persistence
