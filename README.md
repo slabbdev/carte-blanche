@@ -187,6 +187,8 @@ npm run wallet2:watch -- --logical-key <key>   # capture + receipt when approved
 
 1. **S2 ✓** — merchant dispute cockpit (AG Grid + AG Charts): live dispute feed over server-sent events (async row transactions), floating filters, quick filter, deadline row highlighting, status/reason charts, CSV export, persisted column layout.
 2. **S3 ✓** — exercised end-to-end against the live sandbox: wallet purchase → buyer dispute → API → evidence pack (see `npm run roundtrip:sandbox`).
+   The merchant cockpit also ships a **Bryntum Calendar** view: every dispute becomes an event spanning opened → respond-by,
+   colored by urgency (red ≤ 3 days) — the whole 10-day window at a glance, live from the SSE feed.
 3. **S4a ✓** — Merkle inclusion proofs + signed tree heads on every receipt (portable commitment).
 4. **S4b ✓** — RFC 3161 TSA anchoring of tree heads (`npm run anchor`; openssl-verified by third parties).
 5. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.

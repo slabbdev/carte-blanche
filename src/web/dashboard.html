@@ -6,6 +6,9 @@
 <title>Dispute cockpit — Carte Blanche</title>
 <script src="/vendor/ag-grid-community.min.js"></script>
 <script src="/vendor/charts/ag-charts-community.min.js"></script>
+<link rel="stylesheet" href="/vendor/bryntum/calendar.css" />
+<link rel="stylesheet" href="/vendor/bryntum/stockholm-dark.css" />
+<script src="/vendor/bryntum/calendar.umd.js"></script>
 <style>
   :root {
     --bg: #0a0f16; --panel: #101823; --border: #1e2a3a; --text: #e6edf3;
@@ -72,11 +75,14 @@
     <input class="input" id="quickFilter" placeholder="filter disputes…" />
     <button class="ghost" id="refresh">↻ refresh</button>
     <button class="ghost" id="exportCsv">⬇ csv</button>
+    <button id="viewDeadlines">🗓 deadlines timeline</button>
+    <button class="ghost" id="viewGrid" style="display:none">↩ back to grid</button>
     <button id="seed" style="display:none">Seed a SAMPLE dispute (sandbox)</button>
     <span class="hint" id="toolhint"></span>
   </div>
 
   <div id="grid"></div>
+  <div id="calendar" style="display:none"></div>
   <div class="empty" id="empty" style="display:none">No disputes on file. Make a purchase in the console first (mock mode seeds rows from your receipts).</div>
 
   <div class="charts">
@@ -199,8 +205,9 @@ function applyDisputes(rows) {
   }
   updateCharts(rows);
   const has = unique.size > 0;
-  $("empty").style.display = has ? "none" : "block";
-  $("grid").style.display = has ? "block" : "none";
+  const inTimeline = view === "timeline";
+  $("empty").style.display = has || inTimeline ? "none" : "block";
+  $("grid").style.display = has && !inTimeline ? "block" : "none";
   // An operator lands on the hottest case: auto-open the most urgent open
   // dispute (smallest days-left) the first time the table fills.
   if (!CURRENT && has) {
@@ -276,6 +283,61 @@ stream.onmessage = (msg) => {
     $("statusline").textContent = seen.size + " dispute(s) · journal sealed at " + snap.journal.length + " event(s) · live feed";
   }
   if (Array.isArray(snap.disputes)) applyDisputes(snap.disputes);
+};
+
+// --- Bryntum deadlines timeline ----------------------------------------------
+// Every dispute becomes an event spanning opened → respond-by, colored by
+// urgency; the merchant sees the whole 10-day window at a glance.
+let calendar = null;
+function rowsForTimeline() {
+  return gridApi.getRenderedNodes().map((n) => n.data).filter(Boolean);
+}
+function buildCalendar(rows) {
+  if (!window.bryntum || !bryntum.Calendar) return;
+  const now = Date.now();
+  const events = rows
+    .filter((d) => d.respondBy)
+    .map((d) => {
+      const end = new Date(Date.parse(d.respondBy));
+      const start = d.openedAt ? new Date(Date.parse(d.openedAt)) : new Date(end.getTime() - 10 * 864e5);
+      const left = Math.ceil((end.getTime() - now) / 864e5);
+      return {
+        id: d.disputeId,
+        resourceId: "merchant",
+        name: d.disputeId + " · respond in " + Math.max(left, 0) + "d",
+        startDate: start,
+        endDate: end,
+        eventColor: left <= 3 ? "red" : left <= 7 ? "orange" : "indigo",
+      };
+    });
+  if (calendar) {
+    calendar.eventStore.data = events;
+    return;
+  }
+  calendar = new bryntum.Calendar({
+    appendTo: "calendar",
+    date: new Date(),
+    resources: [{ id: "merchant", name: "Merchant disputes" }],
+    events,
+    modes: { agenda: { type: "agenda" }, month: true, week: true, year: false, day: false },
+    eventRenderer: ({ eventRecord }) => '<b>' + esc(eventRecord.name) + "</b>",
+  });
+}
+let view = "grid";
+$("viewDeadlines").onclick = () => {
+  view = "timeline";
+  $("grid").style.display = "none";
+  $("calendar").style.display = "block";
+  $("viewDeadlines").style.display = "none";
+  $("viewGrid").style.display = "inline-block";
+  buildCalendar(rowsForTimeline());
+};
+$("viewGrid").onclick = () => {
+  view = "grid";
+  $("calendar").style.display = "none";
+  $("grid").style.display = "block";
+  $("viewGrid").style.display = "none";
+  $("viewDeadlines").style.display = "inline-block";
 };
 
 loadDisputes().catch((e) => { $("statusline").textContent = "error: " + e.message; });

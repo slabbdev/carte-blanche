@@ -21,6 +21,7 @@
     "wallet2:watch": "tsx scripts/wallet2.ts"
   },
   "dependencies": {
+    "@bryntum/calendar-trial": "^7.3.7",
     "ag-charts-community": "^14.2.0",
     "ag-grid-community": "^36.2.0",
     "express": "^4.21.2"

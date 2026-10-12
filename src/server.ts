@@ -47,6 +47,7 @@ app.use(express.json());
 app.use(express.static(webRoot));
 app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-community", "dist")));
 app.use("/vendor/charts", express.static(path.join(repoRoot, "node_modules", "ag-charts-community", "dist", "umd")));
+app.use("/vendor/bryntum", express.static(path.join(repoRoot, "node_modules", "@bryntum", "calendar-trial")));
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, rails: rails.mode, journalLength: journal.length, catalog: catalog.enabled ? "channel3" : "sample", uptimeSec: Math.round(process.uptime()) });
