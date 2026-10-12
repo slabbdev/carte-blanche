@@ -116,6 +116,18 @@ So the full chain of custody is now: **signed mandate → journalled intent/exec
 inclusion proof → signed tree head → TSA-sealed time**. A receipt proves not just what was spent,
 but when it was provably already recorded.
 
+## Built with the sponsors' stack
+
+Every sponsor prize category is exercised in production, not sprinkled on:
+
+| Sponsor | Where it lives in Carte Blanche |
+|---|---|
+| **AG Grid** | The merchant dispute cockpit (`/dashboard`): live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, CSV export, persisted column state — plus AG Charts for disputes-by-status and amount-by-reason |
+| **Render** | The live demo is Render-native: Frankfurt web service, `/healthz` health checks, auto-deploy on commit, Blueprint (`render.yaml`), disk-mountable journal path |
+| **Channel3** | The agent's shopping scene (`/api/catalog`): real search across 100M+ retail offers, prices pinned straight into signed mandates; labeled sample fallback keeps the demo alive offline |
+| **APIMatic** | The machine-readable contract (`/openapi.json`) — feeds APIMatic for the developer portal, SDK generation, and MCP server output |
+| **Bryntum** | The deadlines timeline (`/dashboard` → deadlines timeline): every dispute as an event from opened to respond-by, urgency-colored, refreshed live |
+
 ## Architecture
 
 ```
