@@ -19,7 +19,8 @@
     "anchor": "tsx scripts/anchor.ts",
     "smoke:tsa": "tsx scripts/anchor.ts",
     "wallet2:create": "tsx scripts/wallet2.ts",
-    "wallet2:watch": "tsx scripts/wallet2.ts"
+    "wallet2:watch": "tsx scripts/wallet2.ts",
+    "apimatic:sync": "tsx scripts/apimatic-sync.ts"
   },
   "dependencies": {
     "@bryntum/calendar-trial": "^7.3.7",
