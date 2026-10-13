@@ -67,7 +67,8 @@
               }
             }
           }
-        }
+        },
+        "description": "List all signed spending mandates, newest first, each with its captured cumulative spend (from the sealed journal) and revocation state. Immutability note: limits never change after creation — only revocation alters behaviour."
       }
     },
     "/api/mandates/{id}/revoke": {
@@ -255,7 +256,8 @@
               }
             }
           }
-        }
+        },
+        "description": "List signed receipts and signed refusals issued by the enforcer, newest first. Optional `mandate_id` query narrows to one mandate. Each item links to its public verification page."
       }
     },
     "/api/verify/receipts/{id}": {
@@ -323,7 +325,8 @@
           "200": {
             "description": "Verification report"
           }
-        }
+        },
+        "description": "Full verification report for a signed refusal: re-checks the mandate signature, the refusal signature and the Merkle inclusion proof, and returns the complete evidence bundle. Public — no account needed."
       }
     },
     "/api/journal/verify": {
@@ -370,7 +373,8 @@
           "200": {
             "description": "Newest events first"
           }
-        }
+        },
+        "description": "The raw sealed-journal events (SHA-256 hash chain). Filterable client-side; `mandate_id` appears in event data for scoping."
       }
     },
     "/api/journal/anchor": {
@@ -441,7 +445,8 @@
           "200": {
             "description": "application/timestamp-query bytes"
           }
-        }
+        },
+        "description": "The raw RFC 3161 timestamp request (TSQ) sent to the TSA for the latest anchored tree head. Verify independently with `openssl ts -verify -queryfile`."
       }
     },
     "/api/catalog": {
@@ -523,7 +528,8 @@
           "200": {
             "description": "Dispute rows with deadline, receipt linkage and source"
           }
-        }
+        },
+        "description": "List buyer disputes: live PayPal sandbox cases when PayPal credentials are configured, otherwise clearly-labeled mock rows derived from the sealed journal. Each row carries its 10-day respond-by deadline and linked receipt id."
       }
     },
     "/api/disputes/{id}/evidence-pack": {
@@ -594,7 +600,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Liveness probe: rails mode (mock/sandbox), sealed-journal length, catalog mode (Channel3 live / sample) and uptime. Used by the Render health check."
       }
     }
   },
