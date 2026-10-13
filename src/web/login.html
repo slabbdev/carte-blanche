@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Log in — Carte Blanche</title>
+<style>
+  :root {
+    --bg: #f2f4f8; --text: #001f33; --muted: #566173; --blue: #0070e0;
+    --blue-deep: #003087; --border: #e7e9ee; --error: #b42715;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "PayPal Sans", "Helvetica Neue", Helvetica, Arial, -apple-system, "Segoe UI", Roboto, sans-serif;
+         display: flex; flex-direction: column; align-items: center; }
+  .wordmark { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin: 52px 0 28px; user-select: none; }
+  .wordmark .pay { color: var(--blue-deep); }
+  .wordmark .pal { color: var(--blue); }
+  .card { width: 400px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid var(--border);
+          border-radius: 12px; box-shadow: 0 4px 18px rgba(0, 31, 51, 0.08); padding: 34px 38px 30px; }
+  h1 { font-size: 21px; margin: 0 0 4px; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 24px; line-height: 1.45; }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 14px 0 5px; }
+  input { width: 100%; border: 1px solid #c8cdd6; border-radius: 8px; padding: 11px 13px;
+          font-size: 14.5px; font-family: inherit; color: var(--text); background: #fff; }
+  input:focus { outline: 2px solid rgba(0, 112, 224, 0.35); border-color: var(--blue); }
+  .error { color: var(--error); font-size: 12.5px; min-height: 18px; margin: 10px 0 0; }
+  button { width: 100%; border: 0; border-radius: 22px; padding: 12px 18px; font-size: 15px;
+           font-weight: 700; font-family: inherit; cursor: pointer; margin-top: 14px; }
+  .primary { background: var(--blue); color: #fff; }
+  .primary:hover { background: #005cb9; }
+  .divider { display: flex; align-items: center; gap: 12px; color: var(--muted);
+             font-size: 12px; margin: 20px 0 4px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .ghost { background: #fff; border: 1px solid #c8cdd6; color: var(--text); }
+  .ghost:hover { background: #f5f8fc; }
+  .note { width: 400px; max-width: calc(100vw - 32px); color: var(--muted); font-size: 11.5px;
+          line-height: 1.55; margin: 22px 0 40px; text-align: center; }
+  .note a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="wordmark"><span class="pay">Carte</span><span class="pal">Blanche</span></div>
+
+<div class="card">
+  <h1>Log in</h1>
+  <p class="sub">Open the merchant console with your PayPal sandbox account.</p>
+  <form id="form">
+    <label for="email">Email or mobile number</label>
+    <input id="email" type="text" autocomplete="username" placeholder="merchant@example.com" />
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+    <div class="error" id="error"></div>
+    <button class="primary" type="submit">Log In</button>
+  </form>
+  <div class="divider">or</div>
+  <button class="ghost" id="sandbox" type="button">Continue as sandbox merchant (demo)</button>
+</div>
+
+<p class="note">
+  Simulation — this login is part of a hackathon demo concept on sandbox rails. No real PayPal
+  authentication happens; any credentials open the sandbox session. Receipt verification needs no
+  account: <a href="/verify">verify a receipt publicly</a>.
+</p>
+
+<script>
+const params = new URLSearchParams(location.search);
+const next = params.get("next")?.startsWith("/") && !params.get("next")?.startsWith("//")
+  ? params.get("next")
+  : "/dashboard";
+
+async function enter(body) {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    document.getElementById("error").textContent = "Login is unavailable right now — try again.";
+    return;
+  }
+  location.href = next;
+}
+
+document.getElementById("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const email = document.getElementById("email").value.trim();
+  if (!email) {
+    document.getElementById("error").textContent = "Enter your email or mobile number.";
+    return;
+  }
+  enter({ email, sub: "sandbox-merchant" });
+});
+document.getElementById("sandbox").addEventListener("click", () => enter({ sub: "sandbox-merchant" }));
+</script>
+</body>
+</html>

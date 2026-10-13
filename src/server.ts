@@ -1,5 +1,6 @@
 import express from "express";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { loadOrCreateKeys } from "./lib/keys.js";
 import { Journal } from "./journal/journal.js";
@@ -44,6 +45,43 @@ const disputes = new DisputeService({
 
 const app = express();
 app.use(express.json());
+
+// ---------------------------------------------------------------------------
+// Demo auth: the merchant console sits behind a simulated PayPal login. The
+// GATE is real — a server-side session; without it the pages 302 to /login.
+// The login INTERFACE is a simulation: no PayPal OAuth, any credentials open
+// a sandbox session, nothing here touches real PayPal authentication. Public
+// verification stays public on purpose — "no account needed to verify a
+// receipt" is a product claim, not an oversight.
+// ---------------------------------------------------------------------------
+const SESSION_COOKIE = "cb_session";
+const SESSION_TTL_MS = 12 * 3_600_000;
+const sessions = new Map<string, { sub: string; expiresAt: number }>();
+
+function cookieToken(req: express.Request): string | undefined {
+  const raw = (req.headers.cookie ?? "")
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(SESSION_COOKIE + "="));
+  return raw?.slice(SESSION_COOKIE.length + 1);
+}
+
+function sessionOf(req: express.Request): { sub: string } | undefined {
+  const token = cookieToken(req);
+  if (!token) return undefined;
+  const session = sessions.get(token);
+  if (!session || session.expiresAt < Date.now()) return undefined;
+  return { sub: session.sub };
+}
+
+const GATED_PAGES = new Set(["/", "/index.html", "/dashboard"]);
+app.use((req, res, next) => {
+  if (req.method === "GET" && GATED_PAGES.has(req.path) && !sessionOf(req)) {
+    return res.redirect("/login?next=" + encodeURIComponent(req.path));
+  }
+  next();
+});
+
 app.use(express.static(webRoot));
 app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-community", "dist")));
 app.use("/vendor/charts", express.static(path.join(repoRoot, "node_modules", "ag-charts-community", "dist", "umd")));
@@ -51,6 +89,29 @@ app.use("/vendor/bryntum", express.static(path.join(repoRoot, "node_modules", "@
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, rails: rails.mode, journalLength: journal.length, catalog: catalog.enabled ? "channel3" : "sample", uptimeSec: Math.round(process.uptime()) });
+});
+
+app.get("/login", (_req, res) => {
+  res.sendFile(path.join(webRoot, "login.html"));
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const body = (req.body ?? {}) as { email?: string; sub?: string };
+  const sub = String(body.sub ?? "sandbox-merchant").slice(0, 64);
+  const token = randomBytes(32).toString("hex");
+  sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+  );
+  res.json({ ok: true, sub, redirect: "/dashboard" });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  const token = cookieToken(req);
+  if (token) sessions.delete(token);
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+  res.json({ ok: true });
 });
 
 app.get("/api/catalog", async (req, res) => {

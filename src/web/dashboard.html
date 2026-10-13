@@ -25,16 +25,17 @@
   /* --- top bar ------------------------------------------------------- */
   .topbar { position: sticky; top: 0; z-index: 40; height: 60px; background: #fff;
             border-bottom: 1px solid var(--border); display: flex; align-items: center;
-            gap: 16px; padding: 0 22px; }
+            gap: 20px; padding: 0 24px; }
   .wordmark { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; user-select: none; }
-  .wordmark .pay { color: var(--blue-deep); }
+  .wordmark .pay { color: var(--navy); }
   .wordmark .pal { color: var(--blue); }
-  .account { display: flex; align-items: center; gap: 10px; padding-left: 16px;
+  .account { display: flex; align-items: center; gap: 10px; padding-left: 20px;
              border-left: 1px solid var(--border); font-size: 13.5px; color: var(--muted); }
   .account b { color: var(--text); font-weight: 600; }
   .envchip { font-size: 10px; font-weight: 800; letter-spacing: 0.8px; color: var(--blue);
              background: rgba(0, 112, 224, 0.1); border-radius: 4px; padding: 3px 8px; }
-  .top-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .top-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  #signout { padding: 6px 14px; font-size: 12.5px; }
   #livePill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700;
               letter-spacing: 0.5px; color: var(--green); }
   #livePill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); opacity: 0.35; transition: opacity 0.15s; }
@@ -46,13 +47,13 @@
   .shell { display: flex; min-height: calc(100vh - 60px); }
   .sidebar { width: 228px; flex: 0 0 228px; background: #fff; border-right: 1px solid var(--border);
              padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
-  .nav-item { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 8px;
-              color: var(--text); font-size: 13.5px; font-weight: 500; cursor: default; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px;
+              color: var(--text); font-size: 13.5px; font-weight: 500; cursor: default; line-height: 1.35; }
   .nav-item svg { width: 17px; height: 17px; stroke: var(--muted); fill: none; stroke-width: 1.7;
                   stroke-linecap: round; stroke-linejoin: round; flex: 0 0 17px; }
   .nav-item.active { background: rgba(0, 112, 224, 0.09); color: var(--blue); font-weight: 700; }
   .nav-item.active svg { stroke: var(--blue); }
-  .nav-section { margin: 16px 12px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: 1px;
+  .nav-section { margin: 20px 12px 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 1px;
                  color: var(--muted); }
   a.nav-item:hover { background: #f5f8fc; cursor: pointer; }
   .sidebar .foot { margin-top: auto; padding: 12px; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
@@ -62,9 +63,7 @@
 
   header.page { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
   h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.2px; }
-  h1 .card { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px;
-             padding: 1px 8px; font-weight: 800; font-size: 15px; vertical-align: 2px; }
-  .statusline { color: var(--muted); font-size: 13px; margin: 4px 0 18px; }
+  .statusline { color: var(--muted); font-size: 13px; margin: 8px 0 24px; }
 
   .pill { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 10px; letter-spacing: 0.4px; }
   .pill.mock { background: #eef0f4; color: var(--muted); }
@@ -74,7 +73,7 @@
   .pill.won { background: #e2f5ec; color: var(--green); }
   .pill.dead { background: #fdeae6; color: var(--red); }
 
-  .toolbar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
   button { background: var(--blue); border: 0; color: #fff; font-weight: 600; border-radius: 19px;
            padding: 8px 16px; cursor: pointer; font-size: 13.5px; font-family: inherit; }
   button:hover { background: #005cb9; }
@@ -96,19 +95,19 @@
   .hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
   .empty { color: var(--muted); font-style: italic; font-size: 14px; padding: 20px 0; }
 
-  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
   .chart { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
            padding: 14px 16px; box-shadow: var(--shadow); }
   .chart h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 
-  .drawer { display: none; margin-top: 18px; background: var(--panel); border: 1px solid var(--border);
-            border-radius: 10px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .drawer { display: none; margin-top: 22px; background: var(--panel); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px 22px; box-shadow: var(--shadow); }
   .drawer.show { display: block; }
-  .drawer h2 { font-size: 16px; margin: 0 0 10px; }
-  .kv { display: grid; grid-template-columns: 180px 1fr; gap: 4px 14px; font-size: 13.5px; margin-bottom: 14px; }
+  .drawer h2 { font-size: 16px; margin: 0 0 12px; }
+  .kv { display: grid; grid-template-columns: 180px 1fr; gap: 6px 14px; font-size: 13.5px; margin-bottom: 16px; }
   .kv .k { color: var(--muted); }
   .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
-  .tabs { display: flex; gap: 6px; margin: 12px 0 8px; align-items: center; }
+  .tabs { display: flex; gap: 8px; margin: 16px 0 10px; align-items: center; }
   .tabs button { font-size: 12.5px; padding: 5px 13px; background: #fff; border: 1px solid #c8cdd6; color: var(--text); }
   .tabs button:hover { background: #f5f8fc; }
   .tabs button.active { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -121,10 +120,11 @@
 <body>
 
 <div class="topbar">
-  <span class="wordmark"><span class="pay">Pay</span><span class="pal">Pal</span></span>
+  <span class="wordmark"><span class="pay">Carte</span><span class="pal">Blanche</span></span>
   <span class="account"><b>sandbox-merchant</b> <span class="envchip">SANDBOX</span></span>
   <div class="top-right">
     <span id="livePill"><span class="dot"></span>LIVE</span>
+    <button class="ghost" id="signout">Sign out</button>
     <span class="avatar">SM</span>
   </div>
 </div>
@@ -135,7 +135,7 @@
     <span class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Activity</span>
     <span class="nav-item active"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>Resolution Center</span>
     <div class="nav-section">INTEGRATIONS</div>
-    <a class="nav-item" href="/"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Carte Blanche · agent spending</a>
+    <a class="nav-item" href="/"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>PayPal sandbox · agent orders</a>
     <a class="nav-item" href="/verify"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-5"/><circle cx="12" cy="12" r="9"/></svg>Public verification</a>
     <a class="nav-item" href="/docs"><svg viewBox="0 0 24 24"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12"/></svg>API</a>
     <div class="foot">Integration concept — simulation on sandbox rails. Not an official PayPal product.</div>
@@ -144,7 +144,7 @@
   <main class="main">
     <div class="content">
       <header class="page">
-        <h1>Resolution Center <span class="card">CARTE BLANCHE</span></h1>
+        <h1>Resolution Center</h1>
         <span id="sourcePill"></span>
       </header>
       <p class="statusline" id="statusline">loading disputes…</p>
@@ -387,6 +387,10 @@ $("submit").onclick = async () => {
 
 // --- toolbar -----------------------------------------------------------------
 $("quickFilter").addEventListener("input", (e) => gridApi.setQuickFilter(e.target.value));
+$("signout").onclick = async () => {
+  try { await api("/api/auth/logout", { method: "POST" }); } catch { /* session is gone either way */ }
+  location.href = "/login";
+};
 $("refresh").onclick = () => loadDisputes().catch((e) => { $("statusline").textContent = "error: " + e.message; });
 $("exportCsv").onclick = () => download("disputes.csv", gridApi.getDataAsCsv(), "text/csv");
 $("seed").onclick = async () => {
