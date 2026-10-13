@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dispute board — Carte Blanche</title>
+<link rel="stylesheet" href="/vendor/taskboard/taskboard.css" />
+<link rel="stylesheet" href="/vendor/taskboard/stockholm-light.css" />
+<script src="/vendor/taskboard/taskboard.umd.js"></script>
+<style>
+  :root {
+    --bg: #f2f4f8; --panel: #ffffff; --border: #e7e9ee; --text: #001f33;
+    --muted: #566173; --blue: #0070e0; --navy: #001f33; --red: #b42715;
+    --shadow: 0 1px 2px rgba(0, 31, 51, 0.06), 0 1px 6px rgba(0, 31, 51, 0.05);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "PayPal Sans", "Helvetica Neue", Helvetica, Arial, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--blue); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 40; height: 60px; background: #fff;
+            border-bottom: 1px solid var(--border); display: flex; align-items: center;
+            gap: 20px; padding: 0 24px; }
+  .wordmark { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; user-select: none; }
+  .wordmark .pay { color: var(--navy); }
+  .wordmark .pal { color: var(--blue); }
+  .account { display: flex; align-items: center; gap: 10px; padding-left: 20px;
+             border-left: 1px solid var(--border); font-size: 13.5px; color: var(--muted); }
+  .account b { color: var(--text); font-weight: 600; }
+  .envchip { font-size: 10px; font-weight: 800; letter-spacing: 0.8px; color: var(--blue);
+             background: rgba(0, 112, 224, 0.1); border-radius: 4px; padding: 3px 8px; }
+  .statusline { color: var(--muted); font-size: 13px; margin: 20px 0 14px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 30px 60px; }
+  #board { background: #fff; border: 1px solid var(--border); border-radius: 10px;
+           padding: 8px; box-shadow: var(--shadow); height: 560px; }
+  .tb-extra { font-size: 12px; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="wordmark" href="/"><span class="pay">Carte</span><span class="pal">Blanche</span></a>
+  <span class="account"><b>sandbox-merchant</b> <span class="envchip">SANDBOX</span></span>
+  <span style="margin-left:auto;font-size:13px"><a href="/dashboard">← Resolution Center</a></span>
+</div>
+
+<div class="wrap">
+  <p class="statusline" id="statusline">loading disputes…</p>
+  <div id="board"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function statusColumn(status) {
+  const s = String(status || "").toUpperCase();
+  if (s.includes("UNDER")) return "UNDER_REVIEW";
+  if (s.includes("WAITING")) return "WAITING";
+  if (s.includes("WON")) return "RESOLVED_WON";
+  if (s.includes("LOST")) return "RESOLVED_LOST";
+  return "OPEN";
+}
+function daysLeft(respondBy) {
+  if (!respondBy) return null;
+  return Math.ceil((Date.parse(respondBy) - Date.now()) / 864e5);
+}
+function eventsFor(rows) {
+  return (rows || []).filter((d) => d.disputeId).map((d) => {
+    const extras = [
+      d.amount != null ? "$" + d.amount : "",
+      d.respondBy ? "respond by " + new Date(d.respondBy).toLocaleDateString() : "",
+    ].filter(Boolean).join(" · ");
+    return {
+      id: d.disputeId,
+      name: (d.reason || "dispute").toLowerCase().replaceAll("_", " ") + (extras ? "\n" + extras : ""),
+      status: statusColumn(d.status),
+      eventColor: daysLeft(d.respondBy) !== null && daysLeft(d.respondBy) <= 3 ? "red" : "indigo",
+    };
+  });
+}
+
+async function main() {
+  const data = await fetch("/api/disputes").then((r) => r.json());
+  const rows = data.disputes ?? [];
+  $("statusline").textContent =
+    rows.length + " dispute(s) · " + (data.source === "paypal" ? "live PayPal sandbox cases" : "mock rows from your receipts") +
+    " · live feed — the kanban of the 10-day response workflow";
+
+  const board = new bryntum.taskboard.TaskBoard({
+    appendTo: "board",
+    columns: [
+      { id: "OPEN", text: "Open" },
+      { id: "UNDER_REVIEW", text: "Under review" },
+      { id: "WAITING", text: "Waiting" },
+      { id: "RESOLVED_WON", text: "Resolved — won" },
+      { id: "RESOLVED_LOST", text: "Resolved — lost" },
+    ],
+    columnField: "status",
+    readOnly: true,
+    project: {
+      events: eventsFor(rows),
+      resources: [{ id: "merchant", name: "Merchant disputes" }],
+    },
+  });
+
+  // live feed: any dispute change re-renders the board's event store
+  const stream = new EventSource("/api/stream");
+  stream.onmessage = async (msg) => {
+    try {
+      const snap = JSON.parse(msg.data);
+      if (Array.isArray(snap.disputes)) board.project.eventStore.data = eventsFor(snap.disputes);
+    } catch { /* ignore malformed frames */ }
+  };
+}
+
+main().catch((e) => { $("statusline").textContent = "error: " + e.message; });
+</script>
+</body>
+</html>

@@ -30,8 +30,9 @@ const keys = loadOrCreateKeys(KEYS_DIR);
 const journal = new Journal(path.join(STATE_DIR, "journal.jsonl"), keys.journal);
 const store = new MandateStore(path.join(STATE_DIR, "mandates.json"));
 const rails = makeRails(process.env);
-// Third-party time anchoring is live-mode only: mock stays deterministic and offline.
-const tsa = rails.mode === "live" ? new TsaClient(process.env.TSA_URLS?.split(",")) : undefined;
+// Third-party time anchoring: best-effort on sandbox and live (additive
+// evidence, never a purchase gate); mock stays deterministic and offline.
+const tsa = rails.mode === "mock" ? undefined : new TsaClient(process.env.TSA_URLS?.split(","));
 const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR, { tsa });
 // Real-product catalog (Channel3 sponsor): without an API key it serves
 // clearly-labeled sample products so the shopping scene still works offline.
@@ -74,7 +75,7 @@ function sessionOf(req: express.Request): { sub: string } | undefined {
   return { sub: session.sub };
 }
 
-const GATED_PAGES = new Set(["/", "/index.html", "/dashboard"]);
+const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board"]);
 app.use((req, res, next) => {
   if (req.method === "GET" && GATED_PAGES.has(req.path) && !sessionOf(req)) {
     return res.redirect("/login?next=" + encodeURIComponent(req.path));
@@ -86,6 +87,7 @@ app.use(express.static(webRoot));
 app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-community", "dist")));
 app.use("/vendor/charts", express.static(path.join(repoRoot, "node_modules", "ag-charts-community", "dist", "umd")));
 app.use("/vendor/bryntum", express.static(path.join(repoRoot, "node_modules", "@bryntum", "calendar-trial")));
+app.use("/vendor/taskboard", express.static(path.join(repoRoot, "node_modules", "@bryntum", "taskboard-trial")));
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, rails: rails.mode, journalLength: journal.length, catalog: catalog.enabled ? "channel3" : "sample", uptimeSec: Math.round(process.uptime()) });
@@ -294,6 +296,25 @@ app.get("/verify/:id", (_req, res) => {
   res.sendFile(path.join(webRoot, "verify.html"));
 });
 
+// Anchor the current journal position with the TSA, on demand. Additive
+// evidence only — no money path touches this — so the route stays open POST:
+// it lets a scheduled job (Render cron) keep the "provable WHEN" continuous
+// instead of anchoring only when a purchase happens.
+app.post("/api/journal/anchor", async (_req, res) => {
+  if (!tsa) {
+    return res.status(400).json({ error: "anchoring is disabled in mock mode (deterministic offline demo)" });
+  }
+  if (journal.length === 0) {
+    return res.status(422).json({ error: "journal is empty — nothing to anchor yet" });
+  }
+  try {
+    const anchor = await journal.anchorTreeHead(tsa);
+    res.json({ ok: true, size: anchor.size, root: anchor.root, tsa: anchor.tsaUrl, genTime: anchor.genTime });
+  } catch (e) {
+    res.status(502).json({ error: `TSA anchor failed: ${(e as Error).message}` });
+  }
+});
+
 app.get("/api/journal/verify", (_req, res) => {
   res.json({ ...journal.verify(), checkpoint: journal.lastCheckpointInfo() ?? null });
 });
@@ -400,6 +421,12 @@ app.get("/api/journal/anchor.tsq", (_req, res) => {
 
 app.get("/dashboard", (_req, res) => {
   res.sendFile(path.join(webRoot, "dashboard.html"));
+});
+
+// The TaskBoard kanban is a page of its own: Bryntum trial UMD bundles cannot
+// share one page (a second bundle silently refuses the populated namespace).
+app.get("/board", (_req, res) => {
+  res.sendFile(path.join(webRoot, "board.html"));
 });
 
 // Machine-readable API contract (APIMatic/Redoc/Postman can consume it as-is).

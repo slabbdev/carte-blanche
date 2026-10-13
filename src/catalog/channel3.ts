@@ -5,15 +5,25 @@
  * falls back to clearly-labeled sample products, so the demo never dies.
  */
 
+export interface CatalogOffer {
+  /** Decimal string, e.g. "74.50". */
+  price: string;
+  currency: string;
+  /** Merchant / retailer name when the API provides it. */
+  merchant?: string;
+}
+
 export interface CatalogProduct {
   id: string;
   title: string;
   description?: string;
-  /** Decimal string, e.g. "49.99" — the price the mandate will pin. */
+  /** Decimal string, e.g. "49.99" — the cheapest known offer, the price the mandate will pin. */
   price?: string;
   currency: string;
   image?: string;
   website?: string;
+  /** Every known merchant offer, cheapest first — the price-comparison lens (drift story fuel). */
+  offers: CatalogOffer[];
 }
 
 export interface CatalogResult {
@@ -65,8 +75,15 @@ function formatPrice(raw: number | string | null | undefined): string | undefine
 
 function mapProduct(raw: RawProduct): CatalogProduct | undefined {
   if (!raw?.id || !raw.title) return undefined;
-  const offers = raw.offers ?? [];
-  const offer = offers.find((o) => o?.price !== undefined && o?.price !== null);
+  const offers: CatalogOffer[] = (raw.offers ?? [])
+    .filter((o) => o?.price !== undefined && o?.price !== null)
+    .map((o) => ({
+      price: formatPrice(o.price) as string,
+      currency: o.currency ?? raw.currency ?? "USD",
+      ...(o.website?.name ? { merchant: o.website.name } : {}),
+    }))
+    .sort((a, b) => Number.parseFloat(a.price) - Number.parseFloat(b.price));
+  const best = offers[0];
   const images = raw.images ?? [];
   // Docs: prefer cleaned_url for grids — any cleaned image beats the hero shot.
   const main = images.find((i) => i.cleaned_url) ?? images.find((i) => i.is_main_image) ?? images[0];
@@ -74,10 +91,11 @@ function mapProduct(raw: RawProduct): CatalogProduct | undefined {
     id: raw.id,
     title: raw.title,
     ...(raw.description ? { description: raw.description } : {}),
-    price: formatPrice(offer?.price ?? raw.price),
-    currency: offer?.currency ?? raw.currency ?? "USD",
+    ...(best ? { price: best.price } : formatPrice(raw.price) ? { price: formatPrice(raw.price) as string } : {}),
+    currency: best?.currency ?? raw.currency ?? "USD",
     image: main?.cleaned_url ?? main?.url ?? undefined,
-    website: offer?.website?.name ?? raw.website?.name ?? undefined,
+    website: best?.merchant ?? raw.website?.name ?? undefined,
+    offers,
   };
 }
 
@@ -116,16 +134,34 @@ export class Channel3Catalog {
   }
 }
 
-/** Deterministic offline products, visibly labeled "sample" in the console. */
+/** Deterministic offline products, visibly labeled "sample" in the console.
+ *  Samples carry multiple merchant offers so the price-comparison (and the
+ *  cheaper-but-unauthorized drift story) demos without an API key. */
 export function sampleProducts(query: string): CatalogProduct[] {
   const q = query.trim().toLowerCase();
   const all: CatalogProduct[] = [
-    { id: "sample-coffee-1", title: "Sample: single-origin coffee beans 1kg", price: "24.00", currency: "USD", description: "offline sample product" },
-    { id: "sample-keyboard-1", title: "Sample: mechanical keyboard, brown switches", price: "89.00", currency: "USD", description: "offline sample product" },
-    { id: "sample-merino-1", title: "Sample: merino wool crew sweater", price: "79.00", currency: "USD", description: "offline sample product" },
-    { id: "sample-lamp-1", title: "Sample: LED desk lamp, dimmable", price: "39.00", currency: "USD", description: "offline sample product" },
-    { id: "sample-headphones-1", title: "Sample: wireless over-ear headphones", price: "129.00", currency: "USD", description: "offline sample product" },
-    { id: "sample-bottle-1", title: "Sample: insulated steel water bottle 750ml", price: "29.00", currency: "USD", description: "offline sample product" },
+    { id: "sample-coffee-1", title: "Sample: single-origin coffee beans 1kg", price: "24.00", currency: "USD", description: "offline sample product", offers: [
+      { price: "24.00", currency: "USD", merchant: "BeanBay" },
+      { price: "21.50", currency: "USD", merchant: "off-grid-roasters" },
+    ] },
+    { id: "sample-keyboard-1", title: "Sample: mechanical keyboard, brown switches", price: "74.50", currency: "USD", description: "offline sample product", offers: [
+      { price: "74.50", currency: "USD", merchant: "SampleMarket" },
+      { price: "89.00", currency: "USD", merchant: "merch@keymagic.example" },
+      { price: "96.00", currency: "USD", merchant: "BulkKeys" },
+    ] },
+    { id: "sample-merino-1", title: "Sample: merino wool crew sweater", price: "79.00", currency: "USD", description: "offline sample product", offers: [
+      { price: "79.00", currency: "USD", merchant: "WoolDirect" },
+    ] },
+    { id: "sample-lamp-1", title: "Sample: LED desk lamp, dimmable", price: "39.00", currency: "USD", description: "offline sample product", offers: [
+      { price: "39.00", currency: "USD", merchant: "LumenOne" },
+      { price: "34.25", currency: "USD", merchant: "bargain-lights" },
+    ] },
+    { id: "sample-headphones-1", title: "Sample: wireless over-ear headphones", price: "129.00", currency: "USD", description: "offline sample product", offers: [
+      { price: "129.00", currency: "USD", merchant: "AudioHaus" },
+    ] },
+    { id: "sample-bottle-1", title: "Sample: insulated steel water bottle 750ml", price: "29.00", currency: "USD", description: "offline sample product", offers: [
+      { price: "29.00", currency: "USD", merchant: "HydroCore" },
+    ] },
   ];
   if (!q) return all;
   const words = q.split(/\s+/);

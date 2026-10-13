@@ -116,6 +116,11 @@ signatures, and the journal events of the operation (`purchase_requested` → `o
 the chain is intact at verification time. Refusals are signed the same way — *"the agent tried to
 spend and was blocked, here is the proof"* is exactly as valuable as the receipt.
 
+**Two lenses (v0.5):** `/verify/<id>` renders the same signed artifact two ways — a **Summary**
+anyone can read (what happened, in plain sentences, what it means concretely) and **Full evidence**
+(signatures, Merkle proof, journal events, raw bundle) for insurers and dispute handlers. Same bytes,
+two audiences.
+
 **Portable commitment (v0.3):** every receipt also carries a **Merkle inclusion proof**: the
 capture event is provably committed by a **signed tree head** over the *whole* journal (Ed25519 by
 the journal key). Anyone holding the bundle can recompute the proof offline — the receipt no
@@ -146,11 +151,11 @@ Every sponsor prize category is exercised in production, not sprinkled on:
 
 | Sponsor | Where it lives in Carte Blanche |
 |---|---|
-| **AG Grid** | The merchant dispute cockpit (`/dashboard`): live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, CSV export, persisted column state — plus AG Charts for disputes-by-status and amount-by-reason |
-| **Render** | The live demo is Render-native: Frankfurt web service, `/healthz` health checks, auto-deploy on commit, Blueprint (`render.yaml`), disk-mountable journal path |
-| **Channel3** | The agent's shopping scene (`/api/catalog`): real search across 100M+ retail offers, prices pinned straight into signed mandates; labeled sample fallback keeps the demo alive offline |
-| **APIMatic** | The machine-readable contract (`/openapi.json`) — feeds APIMatic for the developer portal, SDK generation, and MCP server output |
-| **Bryntum** | The deadlines timeline (`/dashboard` → deadlines timeline): every dispute as an event from opened to respond-by, urgency-colored, refreshed live |
+| **AG Grid** | The merchant dispute cockpit (`/dashboard`): live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, pagination, CSV export, persisted column state — plus AG Charts for disputes-by-status and amount-by-reason |
+| **Render** | The live demo is Render-native: Frankfurt web service, `/healthz` health checks, auto-deploy on commit, Blueprint (`render.yaml`) — including an hourly **cron job** that TSA-anchors the journal on demand (`POST /api/journal/anchor`), keeping the provable-WHEN continuous. Honest note: the free plan has no persistent disk, so the deployed journal lives per-deploy |
+| **Channel3** | The agent's shopping scene (`/api/catalog`): real search across 100M+ retail offers with **per-merchant price comparison** (offers sorted cheapest-first) — loading a cheaper unfamiliar offer into the purchase form is the drift story the mandate stops; prices pinned straight into signed mandates; labeled sample fallback (with sample offers) keeps the demo alive offline |
+| **APIMatic** | The machine-readable contract (`/openapi.json`, 17 paths, examples everywhere) is prepared for APIMatic import: developer portal + SDK generation from `/docs` → *Add API from URL*. Honest state: spec shipped and import-ready, the hosted portal URL lands once the APIMatic workspace is connected |
+| **Bryntum** | The deadlines timeline (`/dashboard` → deadlines timeline): every dispute as an event from opened to respond-by, urgency-colored, refreshed live — plus the **TaskBoard** kanban (`/board`): Open → Under review → Waiting → Won/Lost, live over the same feed. One Bryntum bundle per page (their trial UMDs can't share a namespace) |
 
 ## Architecture
 
@@ -192,6 +197,7 @@ src/
 | `POST /api/agent/purchase` | **the agent boundary** — receipt or signed refusal |
 | `GET /api/receipts?mandate_id=` | receipts + refusals |
 | `GET /dashboard` | merchant dispute cockpit (AG Grid) |
+| `GET /board` | dispute workflow kanban (Bryntum TaskBoard) |
 | `GET /api/disputes` | disputes (sandbox API, or labeled mock rows) |
 | `GET /api/disputes/:id/evidence-pack` | evidence bundle (JSON + markdown) |
 | `POST /api/disputes/:id/submit-evidence` | submit via PayPal `provide-evidence` |

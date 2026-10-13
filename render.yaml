@@ -25,10 +25,22 @@ services:
       - key: PAYPAL_ENV
         value: sandbox
       - key: STATE_DIR
-        value: /var/data/carte-blanche # attach a Render disk to persist the journal
+        value: /var/data/carte-blanche # requires a paid disk — on the free plan the journal is per-deploy (documented, not hidden)
       - key: CHANNEL3_URL
         value: https://api.trychannel3.com
       # Set these in the Render dashboard (do not commit secrets):
       # PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET -> real sandbox rails
       # CHANNEL3_API_KEY                        -> live product catalog
       # TSA_URLS                                 -> alternate RFC 3161 authorities (comma-separated)
+
+  # Hourly TSA anchor: keeps the RFC 3161 "provable WHEN" continuous instead of
+  # anchoring only when a purchase happens. POSTs the public additive-evidence
+  # endpoint; each token lands in the sealed journal, openssl-verifiable.
+  - type: cron-job
+    name: carte-blanche-anchor
+    runtime: node
+    plan: starter
+    region: frankfurt
+    schedule: "17 * * * *"
+    buildCommand: echo "no build needed — the job is a single curl"
+    command: curl -fsS -X POST https://carte-blanche-6jgo.onrender.com/api/journal/anchor

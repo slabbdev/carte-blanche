@@ -157,6 +157,7 @@
         <button class="ghost" id="refresh">↻ Refresh</button>
         <button class="ghost" id="exportCsv">⬇ CSV</button>
         <button id="viewDeadlines">🗓 Deadlines timeline</button>
+        <a class="ghost" href="/board" style="display:inline-flex;align-items:center;border-radius:19px;padding:8px 16px;font-size:13.5px;background:#fff;border:1px solid #c8cdd6;color:var(--text);font-weight:600">🗂 Dispute board</a>
         <button class="ghost" id="viewGrid" style="display:none">↩ Back to grid</button>
         <button id="seed" style="display:none">Seed a SAMPLE dispute (sandbox)</button>
         <span class="hint" id="toolhint" style="margin:0"></span>
@@ -249,6 +250,8 @@ const gridOptions = {
       cellRenderer: (p) => p.value === "paypal" ? '<span class="pill paypal">PAYPAL</span>' : '<span class="pill mock">MOCK</span>' },
   ],
   rowData: [],
+  pagination: true,
+  paginationPageSize: 10,
   getRowId: (p) => String(p.data.disputeId),
   rowClassRules: {
     "row-hot": (p) => { const d = daysLeft(p.data?.respondBy); return d !== null && d <= 3; },
@@ -510,21 +513,19 @@ function buildCalendar(rows) {
   });
 }
 let view = "grid";
-$("viewDeadlines").onclick = () => {
-  view = "timeline";
-  $("grid").style.display = "none";
-  $("calendar").style.display = "block";
-  $("viewDeadlines").style.display = "none";
-  $("viewGrid").style.display = "inline-block";
-  buildCalendar(rowsForTimeline());
-};
-$("viewGrid").onclick = () => {
-  view = "grid";
-  $("calendar").style.display = "none";
-  $("grid").style.display = "block";
-  $("viewGrid").style.display = "none";
-  $("viewDeadlines").style.display = "inline-block";
-};
+function setView(next) {
+  view = next;
+  $("grid").style.display = next === "grid" ? "block" : "none";
+  $("calendar").style.display = next === "timeline" ? "block" : "none";
+  $("viewDeadlines").style.display = next === "timeline" ? "none" : "inline-block";
+  $("viewGrid").style.display = next === "grid" ? "none" : "inline-block";
+  if (next === "timeline") buildCalendar(rowsForTimeline());
+}
+$("viewDeadlines").onclick = () => setView("timeline");
+$("viewGrid").onclick = () => setView("grid");
+// The TaskBoard kanban lives on its own page (/board): Bryntum trial UMD
+// bundles cannot share a page — the second bundle silently refuses to
+// register on the populated `bryntum` namespace.
 
 loadDisputes().catch((e) => { $("statusline").textContent = "error: " + e.message; });
 </script>
