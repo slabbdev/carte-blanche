@@ -78,7 +78,12 @@ export class LiveRails implements PaymentRails {
   async createOrder(args: CreateOrderArgs): Promise<OrderResult> {
     const wantsWallet = args.funding === "wallet";
     const paymentSource = wantsWallet ? walletFunding() : this.sandboxFunding ? sandboxTestCard(this.env) : undefined;
-    const res = await this.client.createOrder({ ...args, paymentSource });
+    // Sandbox card rails reject payee routing (PAYEE_NOT_ENABLED_FOR_CARD_
+    // PROCESSING, hit live 2026-10-13): the enforced payee then travels as
+    // order metadata — PayPal-side verifiable, still absent from the funds
+    // path. Wallet orders keep true routing.
+    const payeeAsMetadata = this.mode === "sandbox" && !wantsWallet;
+    const res = await this.client.createOrder({ ...args, paymentSource, payeeAsMetadata });
     if (!res.ok) throw new Error(`PayPal createOrder failed (${res.status}): ${JSON.stringify(res.data).slice(0, 400)}`);
     return { id: res.data.id, status: res.data.status };
   }

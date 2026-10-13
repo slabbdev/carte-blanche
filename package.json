@@ -12,6 +12,7 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "demo": "tsx src/agent/demo.ts",
+    "demo:intent": "tsx src/agent/demo-amex.ts",
     "demo:llm": "tsx src/agent/llm.ts",
     "roundtrip:sandbox": "tsx scripts/sandbox-roundtrip.ts",
     "wallet:purchase": "tsx scripts/wallet-purchase.ts",

@@ -33,6 +33,30 @@ The gap is documented, not hypothetical: the official PayPal agent toolkit has n
 and a client-level idempotence key (double-spend on retry); no protocol defines disputes for
 agent purchases. Carte Blanche is a working answer on PayPal rails.
 
+## The Amex pattern, open-sourced
+
+Amex announced the **Intent Intelligence Framework** at TechCrunch Disrupt 2026: the agent
+captures an intent, the human signs the parsed parameters, the network issues an ephemeral
+proof-of-intent token, execution is bounded, deviations are rejected at the rail. That is
+this project's architecture under another name — so we re-created the announced experience
+end to end on PayPal rails, with sealed evidence at every stage:
+
+```bash
+npm run demo:intent    # 5 stages + 4 deviations; sandbox rails with creds, mock without
+```
+
+| Intent Intelligence (announced) | Carte Blanche (running) |
+|---|---|
+| 1. Create Intent API | the agent's parse lands as a mandate draft (merchant, item, max price, budget) |
+| 2. human signs parsed parameters | Ed25519 over the canonical JSON of the *parse* — not the prose |
+| 3. Intent ID + proof-of-intent token | mandate id + signed mandate; PayPal mints a single-use order bound by a deterministic `PayPal-Request-Id` |
+| 4. bounded execution | the enforcer captures inside the signed constraints; receipt carries a Merkle inclusion proof |
+| 5. deviation rejected at the rail | merchant swap / price escalation / budget escalation / token reuse — refused *before* money moves, each refusal signed |
+
+Same pattern, different conclusion: it is not a proprietary framework, it is a standard any
+rail can implement — and the evidence layer (signed refusals included) is what makes it
+auditable after the fact.
+
 ## Quickstart (no credentials needed)
 
 ```bash

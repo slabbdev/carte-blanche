@@ -102,6 +102,14 @@ export class PayPalClient {
     currency: string;
     description?: string;
     payee?: string;
+    /**
+     * Route funds to the payee account (unit.payee) — the default — or record
+     * the enforced payee as order metadata (custom_id) instead. Sandbox
+     * card-funded orders reject payee routing outright
+     * (PAYEE_NOT_ENABLED_FOR_CARD_PROCESSING), so on those rails the payee
+     * travels as reconcilable metadata rather than a funds-routing instruction.
+     */
+    payeeAsMetadata?: boolean;
     requestId: string;
     /** Raw payment_source (e.g. sandbox test card) — passed through verbatim. */
     paymentSource?: Record<string, unknown>;
@@ -110,7 +118,10 @@ export class PayPalClient {
       amount: { currency_code: args.currency, value: args.amount },
     };
     if (args.description) unit.description = args.description.slice(0, 127);
-    if (args.payee) unit.payee = { email_address: args.payee };
+    if (args.payee) {
+      if (args.payeeAsMetadata) unit.custom_id = `carte-blanche/payee=${args.payee}`;
+      else unit.payee = { email_address: args.payee };
+    }
     const body: Record<string, unknown> = { intent: "CAPTURE", purchase_units: [unit] };
     if (args.paymentSource) body.payment_source = args.paymentSource;
     return this.request<OrderBody>("POST", "/v2/checkout/orders", body, args.requestId);
