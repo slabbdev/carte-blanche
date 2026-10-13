@@ -65,7 +65,10 @@
   h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.2px; }
   .statusline { color: var(--muted); font-size: 13px; margin: 8px 0 24px; }
 
-  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.2px; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 6px; letter-spacing: 0.2px; }
+  /* AG Grid cells carry the row line-height (~49px): without this override the
+     inline-block pill inherits it and renders as a giant capsule. */
+  .ag-cell .pill { margin: 4px 2px; line-height: 1.4; }
   .pill.mock { background: #eef0f4; color: var(--muted); }
   .pill.paypal { background: rgba(0, 112, 224, 0.12); color: var(--blue); }
   .pill.open { background: #fdf3d8; color: var(--amber); }
@@ -221,6 +224,8 @@ const gridOptions = {
     rowHoverColor: "#f0f6ff",
     fontFamily: "inherit",
     fontSize: 13.5,
+    cellHorizontalPadding: 16,
+    rowHeight: 52,
     wrapperBorderRadius: 0,
   }),
   defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, flex: 1, minWidth: 90 },
