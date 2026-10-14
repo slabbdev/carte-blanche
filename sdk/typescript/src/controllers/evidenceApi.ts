@@ -20,9 +20,13 @@ import {
 import { Health, healthSchema } from '../models/health.js';
 import { number, optional, string, unknown } from '../schema.js';
 import { BaseApi } from './baseApi.js';
+import { ApiError } from '@apimatic/core';
 
 export class EvidenceApi extends BaseApi {
   /**
+   * List signed receipts and signed refusals issued by the enforcer, newest first. Optional `mandate_id`
+   * query narrows to one mandate. Each item links to its public verification page.
+   *
    * @return Response from the API call
    */
   async listReceipts(
@@ -50,6 +54,10 @@ export class EvidenceApi extends BaseApi {
   }
 
   /**
+   * Full verification report for a signed refusal: re-checks the mandate signature, the refusal
+   * signature and the Merkle inclusion proof, and returns the complete evidence bundle. Public — no
+   * account needed.
+   *
    * @param id
    * @return Response from the API call
    */
@@ -77,6 +85,9 @@ export class EvidenceApi extends BaseApi {
   }
 
   /**
+   * The raw sealed-journal events (SHA-256 hash chain). Filterable client-side; `mandate_id` appears in
+   * event data for scoping.
+   *
    * @param limit Example: 50
    * @return Response from the API call
    */
@@ -104,6 +115,21 @@ export class EvidenceApi extends BaseApi {
   }
 
   /**
+   * Additive evidence only — no money path touches this. Lets a scheduled job keep the 'provable WHEN'
+   * continuous instead of anchoring only when a purchase happens. Disabled (400) in mock mode.
+   *
+   * @return Response from the API call
+   */
+  async anchorJournalNow(
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<void>> {
+    const req = this.createRequest('POST', '/api/journal/anchor');
+    req.throwOn(400, ApiError, 'Anchoring disabled (mock mode).');
+    req.throwOn(502, ApiError, 'TSA unreachable or rejected the request.');
+    return req.call(requestOptions);
+  }
+
+  /**
    * The full RFC 3161 response from the Timestamp Authority, served for independent verification
    * (openssl ts -verify -queryfile anchor.tsq -in anchor.tsr).
    *
@@ -117,6 +143,9 @@ export class EvidenceApi extends BaseApi {
   }
 
   /**
+   * The raw RFC 3161 timestamp request (TSQ) sent to the TSA for the latest anchored tree head. Verify
+   * independently with `openssl ts -verify -queryfile`.
+   *
    * @return Response from the API call
    */
   async journalAnchorRequest(
@@ -127,6 +156,9 @@ export class EvidenceApi extends BaseApi {
   }
 
   /**
+   * Liveness probe: rails mode (mock/sandbox), sealed-journal length, catalog mode (Channel3 live /
+   * sample) and uptime. Used by the Render health check.
+   *
    * @return Response from the API call
    */
   async health(requestOptions?: RequestOptions): Promise<ApiResponse<Health>> {

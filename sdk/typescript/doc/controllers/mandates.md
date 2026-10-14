@@ -12,49 +12,37 @@ const mandatesApi = new MandatesApi(client);
 
 ## Methods
 
-* [Create Mandate](../../doc/controllers/mandates.md#create-mandate)
+* [List Mandates](../../doc/controllers/mandates.md#list-mandates)
 * [Revoke Mandate](../../doc/controllers/mandates.md#revoke-mandate)
 
 
-# Create Mandate
+# List Mandates
 
-Mandates are immutable: limits (per-transaction cap, total cap, currency, payee allowlist, time window) are signed at creation and only revocation changes behaviour.
+List all signed spending mandates, newest first, each with its captured cumulative spend (from the sealed journal) and revocation state. Immutability note: limits never change after creation — only revocation alters behaviour.
 
 ```ts
-async createMandate(
-  body: CreateMandateRequest,
+async listMandates(
   requestOptions?: RequestOptions
-): Promise<ApiResponse<SignedMandate>>
+): Promise<ApiResponse<ApiMandatesResponse>>
 ```
 
 ## Parameters
 
 | Parameter | Type | Tags | Description |
 |  --- | --- | --- | --- |
-| `body` | [`CreateMandateRequest`](../../doc/models/create-mandate-request.md) | Body, Required | - |
 | `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
 
 ## Response Type
 
-**200**: The mandate with its Ed25519 signature and public key
+**200**: All mandates with their revocation status
 
-This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The `result` property of this instance returns the response data which is of type [`SignedMandate`](../../doc/models/signed-mandate.md).
+This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The `result` property of this instance returns the response data which is of type [`ApiMandatesResponse`](../../doc/models/api-mandates-response.md).
 
 ## Example Usage
 
 ```ts
-const body: CreateMandateRequest = {
-  principal: 'acme-corp',
-  agent: 'procurement-agent',
-  currency: 'USD',
-  maxPerTransaction: '30.00',
-  maxTotalSpend: '60.00',
-  purpose: 'office supplies',
-  windowEnd: '2026-10-13T00:00:00.000Z',
-};
-
 try {
-  const response = await mandatesApi.createMandate(body);
+  const response = await mandatesApi.listMandates();
 
   // Extracting fully parsed response body.
   console.log(response.result);
@@ -73,18 +61,9 @@ try {
     console.log(error.headers);
     // Extracting response error body of type `string | Stream`.
     console.log(error.body);
-    if (error instanceof CustomError) {
-      console.log(error.result);
-    }
   }
 }
 ```
-
-## Errors
-
-| HTTP Status Code | Error Description | Exception Class |
-|  --- | --- | --- |
-| 400 | Malformed request | [`CustomError`](../../doc/models/custom-error.md) |
 
 
 # Revoke Mandate

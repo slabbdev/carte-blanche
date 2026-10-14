@@ -10,6 +10,10 @@ import { BaseApi } from './baseApi.js';
 
 export class MerchantApi extends BaseApi {
   /**
+   * List buyer disputes: live PayPal sandbox cases when PayPal credentials are configured, otherwise
+   * clearly-labeled mock rows derived from the sealed journal. Each row carries its 10-day respond-by
+   * deadline and linked receipt id.
+   *
    * @return Response from the API call
    */
   async listDisputes(

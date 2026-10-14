@@ -27,7 +27,7 @@
     "quoteProps": "preserve"
   },
   "name": "carte-blanche-apilib",
-  "description": "Mandates and purchase notarization for AI agents on PayPal rails. Every purchase is checked against a signed spending mandate, executed with deterministic PayPal-Request-Ids, journalled in a tamper-evident chain, TSA-anchored, and answered with a signed receipt — or a signed refusal.",
+  "description": "Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with PayPal.  The agent boundary is `POST /api/agent/purchase`: every call is checked against a signed, immutable mandate *before* money moves, executed with a deterministic `PayPal-Request-Id` (a retry can never double-spend), and answered with a signed receipt — or a signed proof of refusal. Every event lands in an append-only SHA-256 chain with signed checkpoints, CT-style Merkle inclusion proofs and RFC 3161 TSA anchoring.  This contract is ready for APIMatic import (developer portal + SDK generation): point it at the raw `openapi.json` served by the live instance.",
   "author": {
     "name": "Carte Blanche",
     "url": "https://github.com/slabbdev/carte-blanche"

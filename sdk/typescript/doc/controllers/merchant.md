@@ -19,6 +19,8 @@ const merchantApi = new MerchantApi(client);
 
 # List Disputes
 
+List buyer disputes: live PayPal sandbox cases when PayPal credentials are configured, otherwise clearly-labeled mock rows derived from the sealed journal. Each row carries its 10-day respond-by deadline and linked receipt id.
+
 ```ts
 async listDisputes(
   requestOptions?: RequestOptions

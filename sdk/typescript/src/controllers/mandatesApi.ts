@@ -6,38 +6,29 @@
 
 import { ApiResponse, RequestOptions } from '../core.js';
 import {
+  ApiMandatesResponse,
+  apiMandatesResponseSchema,
+} from '../models/apiMandatesResponse.js';
+import {
   ApiMandatesRevokeRequest,
   apiMandatesRevokeRequestSchema,
 } from '../models/apiMandatesRevokeRequest.js';
-import {
-  CreateMandateRequest,
-  createMandateRequestSchema,
-} from '../models/createMandateRequest.js';
-import { SignedMandate, signedMandateSchema } from '../models/signedMandate.js';
 import { optional, string } from '../schema.js';
 import { BaseApi } from './baseApi.js';
-import { CustomError } from '../errors/customError.js';
 
 export class MandatesApi extends BaseApi {
   /**
-   * Mandates are immutable: limits (per-transaction cap, total cap, currency, payee allowlist, time
-   * window) are signed at creation and only revocation changes behaviour.
+   * List all signed spending mandates, newest first, each with its captured cumulative spend (from the
+   * sealed journal) and revocation state. Immutability note: limits never change after creation — only
+   * revocation alters behaviour.
    *
-   * @param body
    * @return Response from the API call
    */
-  async createMandate(
-    body: CreateMandateRequest,
+  async listMandates(
     requestOptions?: RequestOptions
-  ): Promise<ApiResponse<SignedMandate>> {
-    const req = this.createRequest('POST', '/api/mandates');
-    const mapped = req.prepareArgs({
-      body: [body, createMandateRequestSchema],
-    });
-    req.header('Content-Type', 'application/json');
-    req.json(mapped.body);
-    req.throwOn(400, CustomError, 'Malformed request');
-    return req.callAsJson(signedMandateSchema, requestOptions);
+  ): Promise<ApiResponse<ApiMandatesResponse>> {
+    const req = this.createRequest('GET', '/api/mandates');
+    return req.callAsJson(apiMandatesResponseSchema, requestOptions);
   }
 
   /**

@@ -29,6 +29,7 @@ export { ApiError } from './core.js';
 export * from './errors/customError.js';
 export type { ApiAgentPurchaseResumeRequest } from './models/apiAgentPurchaseResumeRequest.js';
 export type { ApiCatalogResponse } from './models/apiCatalogResponse.js';
+export type { ApiMandatesResponse } from './models/apiMandatesResponse.js';
 export type { ApiMandatesRevokeRequest } from './models/apiMandatesRevokeRequest.js';
 export type { ApiReceiptsResponse } from './models/apiReceiptsResponse.js';
 export type { ApiVerifyReceiptsResponse } from './models/apiVerifyReceiptsResponse.js';

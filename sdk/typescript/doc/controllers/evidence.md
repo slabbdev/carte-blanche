@@ -18,12 +18,15 @@ const evidenceApi = new EvidenceApi(client);
 * [Verify Journal](../../doc/controllers/evidence.md#verify-journal)
 * [List Events](../../doc/controllers/evidence.md#list-events)
 * [Journal Anchor](../../doc/controllers/evidence.md#journal-anchor)
+* [Anchor Journal Now](../../doc/controllers/evidence.md#anchor-journal-now)
 * [Journal Anchor Token](../../doc/controllers/evidence.md#journal-anchor-token)
 * [Journal Anchor Request](../../doc/controllers/evidence.md#journal-anchor-request)
 * [Health](../../doc/controllers/evidence.md#health)
 
 
 # List Receipts
+
+List signed receipts and signed refusals issued by the enforcer, newest first. Optional `mandate_id` query narrows to one mandate. Each item links to its public verification page.
 
 ```ts
 async listReceipts(
@@ -127,6 +130,8 @@ try {
 
 # Verify Denial
 
+Full verification report for a signed refusal: re-checks the mandate signature, the refusal signature and the Merkle inclusion proof, and returns the complete evidence bundle. Public — no account needed.
+
 ```ts
 async verifyDenial(
   id: string,
@@ -229,6 +234,8 @@ try {
 
 # List Events
 
+The raw sealed-journal events (SHA-256 hash chain). Filterable client-side; `mandate_id` appears in event data for scoping.
+
 ```ts
 async listEvents(
   limit?: number,
@@ -329,6 +336,63 @@ try {
 ```
 
 
+# Anchor Journal Now
+
+Additive evidence only — no money path touches this. Lets a scheduled job keep the 'provable WHEN' continuous instead of anchoring only when a purchase happens. Disabled (400) in mock mode.
+
+```ts
+async anchorJournalNow(
+  requestOptions?: RequestOptions
+): Promise<ApiResponse<void>>
+```
+
+## Parameters
+
+| Parameter | Type | Tags | Description |
+|  --- | --- | --- | --- |
+| `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
+
+## Response Type
+
+**200**: Tree head anchored; returns size, root, TSA url and generation time.
+
+This method returns an [`ApiResponse`](../../doc/api-response.md) instance.
+
+## Example Usage
+
+```ts
+try {
+  const response = await evidenceApi.anchorJournalNow();
+
+  // Extracting fully parsed response body.
+  console.log(response.result);
+
+  // Extracting response status code.
+  console.log(response.statusCode);
+  // Extracting response headers.
+  console.log(response.headers);
+  // Extracting response body of type `string | Stream`
+  console.log(response.body);
+} catch (error) {
+  if (error instanceof ApiError) {
+    // Extracting response error status code.
+    console.log(error.statusCode);
+    // Extracting response error headers.
+    console.log(error.headers);
+    // Extracting response error body of type `string | Stream`.
+    console.log(error.body);
+  }
+}
+```
+
+## Errors
+
+| HTTP Status Code | Error Description | Exception Class |
+|  --- | --- | --- |
+| 400 | Anchoring disabled (mock mode). | `ApiError` |
+| 502 | TSA unreachable or rejected the request. | `ApiError` |
+
+
 # Journal Anchor Token
 
 The full RFC 3161 response from the Timestamp Authority, served for independent verification (openssl ts -verify -queryfile anchor.tsq -in anchor.tsr).
@@ -381,6 +445,8 @@ try {
 
 # Journal Anchor Request
 
+The raw RFC 3161 timestamp request (TSQ) sent to the TSA for the latest anchored tree head. Verify independently with `openssl ts -verify -queryfile`.
+
 ```ts
 async journalAnchorRequest(
   requestOptions?: RequestOptions
@@ -428,6 +494,8 @@ try {
 
 
 # Health
+
+Liveness probe: rails mode (mock/sandbox), sealed-journal length, catalog mode (Channel3 live / sample) and uptime. Used by the Render health check.
 
 ```ts
 async health(requestOptions?: RequestOptions): Promise<ApiResponse<Health>>
