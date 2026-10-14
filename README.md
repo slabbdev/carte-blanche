@@ -8,6 +8,8 @@ Spending mandates, sealed receipts and dispute-proof audits for AI agents paying
 (it replays a recorded run — press the buttons, watch refusals get signed, then verify everything
 in your own browser with WebCrypto. Recorded by `scripts/capture-demo.ts`, served from `docs/`.)
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/slabbdev/carte-blanche)
+
 **▶ Live app on Render (PayPal sandbox rails): https://carte-blanche-6jgo.onrender.com** — grant a
 mandate, spend as the agent, watch a real sandbox order get captured, then verify the receipt at
 `/verify/<id>`. Free instance: the first hit after ~15 min idle takes ~50 s to wake.
@@ -99,6 +101,22 @@ PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm start
 
 Every id and capture then comes from the PayPal sandbox REST API (Orders v2).
 `PAYPAL_MODE=mock` (default) is a dev simulator and never pretends to be PayPal.
+
+## MCP server — the evidence layer as agent tools
+
+`npm run mcp` starts a stdio MCP server (works with Claude Desktop, Claude Code, any MCP client).
+Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchase`, `my_artifacts`,
+`verify_artifact`, `recall_preferences`/`save_preference`, `plan_journey`/`approve_journey`/
+`run_journey`… — all funnelled through the same enforcer: the model gets a signed receipt or a
+signed refusal, never rail access. Point `CB_BASE_URL` at any instance. Agent-readable API map at
+[`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
+
+## Agent memory (journalled)
+
+The agent remembers its principal — tiers, trusted merchants, standing instructions — through
+`save_preference` / `recall_preferences` (or `POST /api/agent/preferences`). Every change is a fact
+landed in the sealed journal (old → new), so "why did the agent pick this?" stays auditable evidence,
+not a vibe.
 
 ## Merchant dispute cockpit
 
@@ -215,6 +233,8 @@ src/
 | `GET /api/verify/:kind/:id` | full verification report |
 | `GET /api/journal/verify` | chain integrity |
 | `GET /healthz` | liveness + rails mode |
+| `GET /llms.txt` | agent-readable API map (the llms.txt convention) |
+| `GET/POST /api/agent/preferences` | the agent's journalled memory of its principal |
 
 ## Human-in-the-loop wallet purchases (v0.5)
 

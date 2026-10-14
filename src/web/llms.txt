@@ -1,0 +1,52 @@
+# Carte Blanche
+
+> Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with PayPal.
+> An agent with a payment tool is a walking blank check: this layer sits between the agent and
+> PayPal, checks every mutative call against an Ed25519-signed spending mandate BEFORE money moves,
+> executes with a deterministic PayPal-Request-Id (a retry can never double-spend), and answers
+> with a signed receipt — or a signed proof of refusal naming the limit that blocked it.
+
+Live instance (PayPal sandbox rails): https://carte-blanche-6jgo.onrender.com
+Contract: https://carte-blanche-6jgo.onrender.com/openapi.json (OpenAPI 3.0, APIMatic-validated)
+MCP server: `mcp/server.ts` in the repo (`npm run mcp`) — the same API as agent tools.
+
+## Core concepts
+
+- Mandate: signed, immutable spending authority (per-transaction cap, total cap, currency, payee
+  allowlist, time window). Only revocation changes behavior. The agent cannot escalate its own budget.
+- Receipt: signed bundle proving a purchase happened under a mandate, with journal events and a
+  Merkle inclusion proof against a signed tree head (RFC 3161 TSA-anchored).
+- Refusal: signed proof that an attempt was BLOCKED, naming the limit (reason codes:
+  OVER_PER_TRANSACTION, OVER_TOTAL_CAP, PAYEE_NOT_ALLOWED, MANDATE_REVOKED, ...). Refusals are
+  evidence, not errors: treat them as the human's standing decision, do NOT retry around them.
+
+## API map (all JSON; mutative endpoints are the agent boundary)
+
+- GET  /healthz — liveness; rails mode (mock/sandbox), journal length.
+- GET  /api/catalog?q=... — product search (Channel3 live offers; labeled samples offline).
+- POST /api/mandates — grant a signed mandate (principal, agent, purpose, limits).
+- GET  /api/mandates, /api/mandates/:id — inspect mandates incl. captured spend.
+- POST /api/mandates/:id/revoke — revoke immediately (journalled).
+- POST /api/agent/purchase — THE agent boundary: receipt or signed refusal.
+- POST /api/agent/purchase/resume — complete a wallet purchase after buyer approval.
+- GET  /api/receipts?mandate_id= — your receipts and refusals.
+- GET  /api/verify/receipts/:id, /api/verify/denials/:id — full verification report (public, no account).
+- GET  /api/journal/verify — chain integrity. /api/journal/events — raw sealed events.
+- GET  /api/journal/anchor — latest RFC 3161 TSA anchor. POST /api/journal/anchor — anchor now.
+- GET/POST /api/agent/preferences — the agent's journalled memory of its principal's tastes and
+  standing instructions (save_preference / recall_preferences in the MCP server).
+- POST /api/journeys, /api/journeys/:id/approve, /api/journeys/:id/run — purchase journeys: plan a
+  basket, approve (a mandate is derived and signed FROM the basket), run every line through the
+  enforcer. Lines added after approval meet the same signed walls.
+- GET  /api/disputes — buyer disputes with 10-day respond-by deadlines; evidence packs at
+  /api/disputes/:id/evidence-pack.
+
+## Behavior rules for agents
+
+1. Call `mandate_status` (GET /api/mandates/:id) before spending.
+2. Attempt purchases only through POST /api/agent/purchase. A refusal is final signed evidence of
+   the principal's decision — never work around it; report it instead.
+3. Remember durable preferences via POST /api/agent/preferences (they are journalled; your choices
+   stay auditable).
+4. Everything you do is hashed into an append-only chain with signed checkpoints. Verification is
+   public: anyone with an artifact id can re-check every signature at /verify/:id — no account.

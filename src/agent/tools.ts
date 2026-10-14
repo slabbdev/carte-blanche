@@ -89,6 +89,15 @@ export async function executeTool(
           }),
         }),
       );
+    case "save_preference":
+      return JSON.stringify(
+        await json("/api/agent/preferences", {
+          method: "POST",
+          body: JSON.stringify({ key: args.key, value: args.value, why: args.why }),
+        }),
+      );
+    case "recall_preferences":
+      return JSON.stringify(await json("/api/agent/preferences"));
     case "my_receipts":
       return JSON.stringify(
         await json(`/api/receipts?mandate_id=${encodeURIComponent(String(args.mandate_id))}`),

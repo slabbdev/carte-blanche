@@ -20,11 +20,13 @@
     "smoke:tsa": "tsx scripts/anchor.ts",
     "wallet2:create": "tsx scripts/wallet2.ts",
     "wallet2:watch": "tsx scripts/wallet2.ts",
-    "apimatic:sync": "tsx scripts/apimatic-sync.ts"
+    "apimatic:sync": "tsx scripts/apimatic-sync.ts",
+    "mcp": "tsx mcp/server.ts"
   },
   "dependencies": {
     "@bryntum/calendar-trial": "^7.3.7",
     "@bryntum/taskboard-trial": "^7.3.7",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "ag-charts-community": "^14.2.0",
     "ag-grid-community": "^36.2.0",
     "express": "^4.21.2"

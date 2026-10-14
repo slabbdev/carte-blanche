@@ -12,6 +12,7 @@ import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
 import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from "./journey/journey.js";
+import { PreferenceStore } from "./agent/preferences.js";
 import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 import { Channel3Catalog } from "./catalog/channel3.js";
 
@@ -47,6 +48,8 @@ const disputes = new DisputeService({
 // Purchase journeys: planned baskets that derive their own signed mandate and
 // execute line by line through the enforcer (see /planner).
 const journeys = new JourneyPlanner(STATE_DIR, journal);
+// The agent's journalled memory: what it knows about its principal, auditable like everything else.
+const preferences = new PreferenceStore(STATE_DIR, journal);
 
 const app = express();
 app.use(express.json());
@@ -272,6 +275,22 @@ app.post("/api/journeys/:id/approve", (req, res) => {
   journal.append("mandate_issued", { mandate_id: mandate.id, principal: mandate.principal, agent: mandate.agent });
   const approved = journeys.markApproved(j.id, mandate.id);
   res.json({ ...(approved as typeof j), total: journeyTotal(j), mandate: signed });
+});
+
+// --- agent memory: journalled preferences the agent (and any MCP client) reads/writes
+app.get("/api/agent/preferences", (_req, res) => {
+  res.json(preferences.get());
+});
+
+app.post("/api/agent/preferences", (req, res) => {
+  const body = req.body as { key?: string; value?: string; why?: string; note?: string };
+  try {
+    if (body.note) return res.json(preferences.note(String(body.note)));
+    if (!body.key || !body.value) return res.status(400).json({ error: "key and value are required (or pass note)" });
+    res.json(preferences.set(String(body.key), String(body.value), body.why ? String(body.why) : undefined));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
 });
 
 // Run: every still-planned line goes through the enforcer, in order. Off-list
