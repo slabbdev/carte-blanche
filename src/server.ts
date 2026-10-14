@@ -15,6 +15,7 @@ import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
 import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from "./journey/journey.js";
 import { PreferenceStore } from "./agent/preferences.js";
+import { TrackRecordService } from "./agent/trackrecord.js";
 import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 import { Channel3Catalog } from "./catalog/channel3.js";
 
@@ -52,6 +53,9 @@ const disputes = new DisputeService({
 const journeys = new JourneyPlanner(STATE_DIR, journal);
 // The agent's journalled memory: what it knows about its principal, auditable like everything else.
 const preferences = new PreferenceStore(STATE_DIR, journal);
+// Portable, signed track records: what an agent DID, from the sealed chain —
+// the raw material of agent reputation on these rails.
+const trackRecords = new TrackRecordService(journal, keys.server);
 
 const app = express();
 app.use(express.json());
@@ -310,6 +314,16 @@ app.post("/api/journeys/:id/approve", (req, res) => {
   journal.append("mandate_issued", { mandate_id: mandate.id, principal: mandate.principal, agent: mandate.agent });
   const approved = journeys.markApproved(j.id, mandate.id);
   res.json({ ...(approved as typeof j), total: journeyTotal(j), mandate: signed });
+});
+
+// Signed track record: the agent's verifiable reputation from the sealed chain.
+// Merchants check "does this agent honor its walls" before accepting agent orders;
+// buyers check it before delegating spending. No trust in us: the statement is
+// signed and carries the chain tip it commits to.
+app.get("/api/agents/:agent/track-record", (req, res) => {
+  const agent = req.params.agent.trim();
+  if (!agent) return res.status(400).json({ error: "agent name is required" });
+  res.json(trackRecords.statementFor(agent));
 });
 
 // --- agent memory: journalled preferences the agent (and any MCP client) reads/writes

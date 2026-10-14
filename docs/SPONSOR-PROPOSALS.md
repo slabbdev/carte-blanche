@@ -41,6 +41,7 @@ cryptographic intent plus sealed evidence beats behavioral vibes. Everything bel
 | **Agent dispute category with evidence packs** — "my agent did it" needs its own dispute semantics and an evidence standard | evidence packs bundling the signed mandate, receipts, refusals and chain verification, wired to `provide-evidence` |
 | **Agent spending statements** — a buyer-visible audit of everything their agent did | the sealed journal + public `/verify/:id` + the journalled agent memory |
 | **"Agents are safer than humans" narrative** — crypto intent > behavioral signals | the drift demos: cheaper-elsewhere, over-cap, off-list, replay — each stopped by signed proof |
+| **Agent reputation / underwriting** — PayPal cannot observe agent behavior, but it can OWN the ledger of walls honored | **signed agent track records** (`GET /api/agents/:agent/track-record`): purchases captured, spend, refusals honored by reason — computed from the sealed chain, signed, portable, third-party verifiable. The raw material of agent underwriting: merchants accept agents whose walls provably held; buyers delegate to agents with a track record. The deeper point: obedience here is *architectural* (the enforcer has no bypass path), so the reputation is not a promise — it is an accounting |
 
 **What we propose to hand them.**
 1. **The pattern document** — "Intent-scoped payments on PayPal rails": the 5-stage pattern, the

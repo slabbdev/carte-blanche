@@ -110,6 +110,15 @@ server.tool(
 );
 
 server.tool(
+  "agent_track_record",
+  "Fetch an agent's signed track record from the sealed chain: purchases captured, spend, refusals honored (by reason). Merchants check this before accepting agent orders; include it when proving your trustworthiness to the principal.",
+  { agent: z.string().describe("The agent name the mandates were issued to") },
+  async ({ agent }) => ({
+    content: [{ type: "text", text: JSON.stringify(await api(`/api/agents/${encodeURIComponent(agent)}/track-record`), null, 2) }],
+  }),
+);
+
+server.tool(
   "recall_preferences",
   "Read everything remembered about the principal: saved tastes, tiers, trusted merchants, standing notes. ALWAYS call before proposing or buying anything.",
   {},

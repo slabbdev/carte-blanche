@@ -216,6 +216,16 @@
         <div id="outcomes"><div class="empty">nothing yet</div></div>
       </section>
 
+      <section class="card">
+        <h2>Agent track record</h2>
+        <p class="sub">What an agent DID, computed from the sealed chain and signed — portable, third-party verifiable. A refusal here is not a failure: each one is a wall that held. This is the raw material of agent reputation on these rails.</p>
+        <div class="row">
+          <div style="flex:1;min-width:220px"><input id="tr-agent" placeholder="agent name (e.g. shopping-agent-1)" style="border-radius:19px" /></div>
+          <button class="ghost" id="tr-fetch">Fetch track record</button>
+        </div>
+        <div id="tr-out" style="margin-top:12px"></div>
+      </section>
+
       <p class="journalstrip" id="journal">checking journal…</p>
     </div>
   </main>
@@ -501,6 +511,29 @@ const stream = new EventSource("/api/stream");
 stream.onmessage = () => {
   pulseLive();
   refreshJournal().catch(() => {});
+};
+
+$("tr-fetch").onclick = async () => {
+  const agent = $("tr-agent").value.trim();
+  if (!agent) { $("tr-out").innerHTML = '<div class="empty">enter an agent name</div>'; return; }
+  $("tr-out").innerHTML = '<div class="empty">computing from the sealed chain…</div>';
+  try {
+    const t = await api("/api/agents/" + encodeURIComponent(agent) + "/track-record");
+    const chips = t.refusals.map((r) => '<span class="pill warn">' + esc(r.code) + " × " + r.count + "</span>").join(" ") || '<span class="pill mock">no refusals</span>';
+    const cap = t.captured.map((c) => "<b>" + esc(c.amount) + " " + esc(c.currency) + "</b>").join(", ") || "—";
+    $("tr-out").innerHTML = `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+        <div><div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">Mandates</div><div style="font-size:19px;font-weight:800">${t.mandatesIssued}</div></div>
+        <div><div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">Purchases</div><div style="font-size:19px;font-weight:800">${t.purchasesCaptured}</div></div>
+        <div><div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">Captured</div><div style="font-size:19px;font-weight:800">${cap}</div></div>
+        <div style="min-width:200px"><div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">Walls that held</div><div>${chips}</div></div>
+        <div style="margin-left:auto"><a href="#" onclick="navigator.clipboard.writeText(JSON.stringify(t,null,2));window.t=t;return false" title="statement JSON copied to clipboard as window.t">copy statement ⧉</a></div>
+      </div>
+      <div class="muted" style="font-size:11.5px;margin-top:8px">${esc(t.guarantee)}<br/>signed at journal length ${t.statement.journalLength} · tip ${esc(t.statement.chainTip.slice(0, 12))}… · verify with the server public key (${esc(t.statement.publicKey.slice(0, 12))}…)</div>`;
+    window.t = t;
+  } catch (e) {
+    $("tr-out").innerHTML = '<div class="empty">✗ ' + esc(e.message) + "</div>";
+  }
 };
 
 refreshStatus(); refreshMandates(); refreshOutcomes(); refreshJournal();

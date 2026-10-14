@@ -111,6 +111,16 @@ Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchas
 signed refusal, never rail access. Point `CB_BASE_URL` at any instance. Agent-readable API map at
 [`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
 
+## Agent track record — refusals as reputation
+
+`GET /api/agents/:agent/track-record` computes what an agent DID from the sealed chain — mandates
+issued, purchases captured with exact spend, refusals honored by reason code — and signs a portable
+statement committing to the chain tip. The honest core is structural: **the enforcer has no bypass
+path**, so "this agent honors its walls" is accounting, not a promise. That signed statement is the
+raw material of agent underwriting: merchants accept agents whose walls provably held; buyers
+delegate to agents with a track record; PayPal — which cannot observe agent behavior — can own the
+ledger of it.
+
 ## Agent memory (journalled)
 
 The agent remembers its principal — tiers, trusted merchants, standing instructions — through
