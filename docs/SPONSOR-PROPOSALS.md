@@ -57,6 +57,15 @@ cryptographic intent plus sealed evidence beats behavioral vibes. Everything bel
 3. **The evidence standard** — refusals-as-signed-proof + journalled agent memory is a proposal for
    what agent-payment *auditability* should mean. Free to adopt.
 
+**Alignment with their actual strategy (public announcements):** PayPal launched **Agentic
+Commerce Services** (Oct 2025) — **Agent Ready** (the payments foundation for agent transactions,
+live early 2026), **Store Sync** (machine-readable merchant feeds), built on Google's **AP2**
+(verifiable agent payments), plus **WebMCP** (Sep 2026, merchants become agent-ready) and a
+Mastercard agentic partnership. Read plainly: Agent Ready makes agent payments POSSIBLE — it does
+not make them ACCOUNTABLE. Nothing in Agent Ready tells the merchant the agent honors its walls,
+gives the buyer dispute-grade evidence, or lets the buyer hold the key. That gap is our entire
+product, and every proposal below slots into their named surfaces rather than beside them.
+
 **The smoking gun — their own MCP server proves the gap.** PayPal ships an official MCP server
 (`@paypal/mcp`, github.com/paypal/paypal-mcp-server) so agents can call their APIs from Claude
 Desktop or Cursor. Its tool list: `create_order`, `pay_order`, `create_refund`, invoices,

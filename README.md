@@ -4,6 +4,10 @@
 
 Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with **PayPal**.
 
+**▶ One command, the whole story:** `npm run demo:full` — buyer signs the intent, the agent shops
+the live catalog and proposes a basket, the mandate is derived from it, drift is refused with signed
+proof, and the agent's track record is sealed. Sandbox rails with creds, mock without.
+
 **▶ Interactive explainer with real signed artifacts: https://slabbdev.github.io/carte-blanche/**
 (it replays a recorded run — press the buttons, watch refusals get signed, then verify everything
 in your own browser with WebCrypto. Recorded by `scripts/capture-demo.ts`, served from `docs/`.)
