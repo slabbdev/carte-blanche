@@ -57,6 +57,13 @@ cryptographic intent plus sealed evidence beats behavioral vibes. Everything bel
 3. **The evidence standard** — refusals-as-signed-proof + journalled agent memory is a proposal for
    what agent-payment *auditability* should mean. Free to adopt.
 
+**Alignment with their actual strategy — mapped item by item in [AP2-ALIGNMENT.md](AP2-ALIGNMENT.md):**
+their AP2 post states the gaps in their own words ("dispute workflows lack cryptographic proof",
+"resolution rests on logs and chargebacks", trust beyond "curated allow-lists") — each one maps to
+a shipped artifact below. Their "Payment Mandate" (a minimal credential derived from Cart/Intent
+Mandates) is our journey-derived signed mandate. We are not a rival protocol: **we are the AP2
+working prototype on their rails.**
+
 **Alignment with their actual strategy (public announcements):** PayPal launched **Agentic
 Commerce Services** (Oct 2025) — **Agent Ready** (the payments foundation for agent transactions,
 live early 2026), **Store Sync** (machine-readable merchant feeds), built on Google's **AP2**

@@ -4,6 +4,8 @@
 
 Spending mandates, sealed receipts and dispute-proof audits for AI agents paying with **PayPal**.
 
+**📄 AP2 alignment:** PayPal builds Agent Ready on the Agent Payments Protocol — [our mapping](docs/AP2-ALIGNMENT.md) shows every stated AP2 gap filled by a shipped Carte Blanche artifact.
+
 **▶ One command, the whole story:** `npm run demo:full` — buyer signs the intent, the agent shops
 the live catalog and proposes a basket, the mandate is derived from it, drift is refused with signed
 proof, and the agent's track record is sealed. Sandbox rails with creds, mock without.
