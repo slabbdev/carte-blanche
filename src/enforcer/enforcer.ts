@@ -226,12 +226,18 @@ export class Enforcer {
 
     const createRequestId = `cb-${logicalKey}-cr`;
     const captureRequestId = `cb-${logicalKey}-cp`;
+    // Agent-purchase marker, stamped onto PayPal's OWN order record (custom_id):
+    // PayPal cannot tell an agent purchase from a human one — this label makes
+    // every agent purchase self-declaring and detectable on their side (order
+    // reads, transaction search, webhooks) without PayPal changing anything.
+    const agentMarker = `cb|agent=${signed.mandate.agent}|mandate=${signed.mandate.id}`;
     const order = await this.rails.createOrder({
       amount: req.amount,
       currency: req.currency,
       description: req.description,
       payee: req.payee,
       requestId: createRequestId,
+      customId: agentMarker,
       ...(req.funding ? { funding: req.funding } : {}),
     });
     this.journal.append("order_created", {

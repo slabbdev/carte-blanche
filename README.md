@@ -111,6 +111,21 @@ Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchas
 signed refusal, never rail access. Point `CB_BASE_URL` at any instance. Agent-readable API map at
 [`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
 
+## Agent-purchase detection — labeled on PayPal's own records
+
+PayPal cannot tell an agent purchase from a human one: to their rails, an agent order is just
+another API call. Carte Blanche closes that blind spot without PayPal changing anything — every
+order it mediates carries an agent marker in `custom_id`:
+
+```
+custom_id = "cb|agent=shopping-agent-1|mandate=cbmd-…|payee=merch@keymagic.example"
+```
+
+The marker survives into PayPal's own transaction records — `npm run tx:label-proof` reads their
+Transaction Search API and shows agent purchases tagged 🤖 next to human ones (9/39 on our sandbox
+at time of writing). Detection, reporting, and future agent-specific dispute semantics: provable
+today, on their rails, with zero PayPal changes.
+
 ## My agents — the buyer's oversight tab
 
 `/oversight` is the buyer-side view PayPal's app would grow: per agent — spend captured, purchases,

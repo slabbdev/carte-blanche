@@ -9,6 +9,8 @@ export interface CreateOrderArgs {
   requestId: string;
   /** "card" funds sandbox orders with the test card; "wallet" requires buyer approval (human-in-the-loop). */
   funding?: "card" | "wallet";
+  /** Agent-purchase marker stamped onto PayPal's own order record (custom_id). */
+  customId?: string;
 }
 
 export interface OrderResult {
@@ -83,7 +85,13 @@ export class LiveRails implements PaymentRails {
     // order metadata — PayPal-side verifiable, still absent from the funds
     // path. Wallet orders keep true routing.
     const payeeAsMetadata = this.mode === "sandbox" && !wantsWallet;
-    const res = await this.client.createOrder({ ...args, paymentSource, payeeAsMetadata });
+    let payee = args.payee;
+    let customId = args.customId;
+    if (payeeAsMetadata && payee) {
+      customId = `${customId ? `${customId}|` : ""}payee=${payee}`;
+      payee = undefined;
+    }
+    const res = await this.client.createOrder({ ...args, payee, customId, paymentSource, payeeAsMetadata });
     if (!res.ok) throw new Error(`PayPal createOrder failed (${res.status}): ${JSON.stringify(res.data).slice(0, 400)}`);
     return { id: res.data.id, status: res.data.status };
   }

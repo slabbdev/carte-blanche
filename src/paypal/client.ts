@@ -110,6 +110,8 @@ export class PayPalClient {
      * travels as reconcilable metadata rather than a funds-routing instruction.
      */
     payeeAsMetadata?: boolean;
+    /** Agent-purchase marker written onto PayPal's own order record. */
+    customId?: string;
     requestId: string;
     /** Raw payment_source (e.g. sandbox test card) — passed through verbatim. */
     paymentSource?: Record<string, unknown>;
@@ -118,9 +120,9 @@ export class PayPalClient {
       amount: { currency_code: args.currency, value: args.amount },
     };
     if (args.description) unit.description = args.description.slice(0, 127);
-    if (args.payee) {
-      if (args.payeeAsMetadata) unit.custom_id = `carte-blanche/payee=${args.payee}`;
-      else unit.payee = { email_address: args.payee };
+    if (args.customId) unit.custom_id = args.customId.slice(0, 127);
+    if (args.payee && !args.payeeAsMetadata) {
+      unit.payee = { email_address: args.payee };
     }
     const body: Record<string, unknown> = { intent: "CAPTURE", purchase_units: [unit] };
     if (args.paymentSource) body.payment_source = args.paymentSource;
@@ -137,6 +139,27 @@ export class PayPalClient {
 
   async listDisputes(): Promise<PayPalResponse<{ links?: unknown[]; items?: Array<{ dispute_id: string; status: string; reason: string }> }>> {
     return this.request("GET", "/v1/customer/disputes", undefined, undefined);
+  }
+
+  /**
+   * Transaction Search (v1/reporting/transactions): PayPal's own record of
+   * captured transactions. Each entry carries `custom_field` — the custom_id
+   * we stamped at order creation — which is how agent purchases become
+   * DETECTABLE on PayPal's side without PayPal changing anything.
+   */
+  async listTransactions(start: string, end: string): Promise<PayPalResponse<{
+    transaction_details?: Array<{
+      transaction_info: {
+        transaction_id?: string;
+        transaction_status?: string;
+        transaction_amount?: { currency_code?: string; value?: string };
+        custom_field?: string;
+        transaction_initiation_date?: string;
+      };
+    }>;
+  }>> {
+    const qs = new URLSearchParams({ start_date: start, end_date: end, fields: "all", page_size: "100" });
+    return this.request("GET", `/v1/reporting/transactions?${qs.toString()}`, undefined, undefined);
   }
 
   async getDispute(disputeId: string): Promise<PayPalResponse<Record<string, unknown>>> {
