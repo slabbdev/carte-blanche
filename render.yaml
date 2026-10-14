@@ -36,6 +36,8 @@ services:
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false # webhook: PAYMENT.CAPTURE.COMPLETED + CHECKOUT.ORDER.APPROVED -> /api/webhooks/paypal
       - key: CHANNEL3_API_KEY
         sync: false
       - key: TSA_URLS
