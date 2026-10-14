@@ -603,6 +603,187 @@
         },
         "description": "Liveness probe: rails mode (mock/sandbox), sealed-journal length, catalog mode (Channel3 live / sample) and uptime. Used by the Render health check."
       }
+    },
+    "/api/journeys": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Plan a purchase journey (a basket of catalog lines)",
+        "description": "Creates a journey draft from catalog lines (title, price, merchant domain, quantity). The journey derives its own mandate on approval.",
+        "operationId": "createJourney",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Journey created with derived total."
+          },
+          "400": {
+            "description": "No valid lines."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List purchase journeys (newest first)",
+        "operationId": "listJourneys",
+        "responses": {
+          "200": {
+            "description": "Journeys with totals and per-line statuses."
+          }
+        }
+      }
+    },
+    "/api/journeys/{id}/approve": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Approve a journey: derive and sign a mandate from the basket",
+        "description": "The human challenge applied to a basket: payee allowlist from the lines' merchants, per-purchase cap from the priciest line, total cap from the sum — all Ed25519-signed at approval. Lines added afterwards meet the same signed walls.",
+        "operationId": "approveJourney",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journey approved; returns the journey plus the signed mandate."
+          },
+          "404": {
+            "description": "Journey not found."
+          },
+          "409": {
+            "description": "Already approved."
+          }
+        }
+      }
+    },
+    "/api/journeys/{id}/run": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Run a journey: execute every planned line through the enforcer",
+        "description": "Each line is a purchase under the derived mandate. Off-list merchants and over-budget lines come back as signed refusals in the journey itself; receipts and refusals are journalled and publicly verifiable.",
+        "operationId": "runJourney",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journey with per-line outcomes."
+          },
+          "404": {
+            "description": "Journey not found."
+          },
+          "409": {
+            "description": "Journey not approved."
+          }
+        }
+      }
+    },
+    "/api/journeys/{id}/lines": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Add a line to a journey draft",
+        "operationId": "addJourneyLine",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "merchant": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated journey."
+          },
+          "404": {
+            "description": "Journey not found."
+          }
+        }
+      }
     }
   },
   "components": {

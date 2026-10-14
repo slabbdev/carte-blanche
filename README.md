@@ -33,6 +33,17 @@ The gap is documented, not hypothetical: the official PayPal agent toolkit has n
 and a client-level idempotence key (double-spend on retry); no protocol defines disputes for
 agent purchases. Carte Blanche is a working answer on PayPal rails.
 
+## Purchase journeys (the planner)
+
+`/planner` is the whole stack in one screen: search the live catalog (Channel3), add lines to a
+basket, **approve** — the mandate is *derived from the basket itself* (payee allowlist from the
+lines' merchants, per-purchase cap from the priciest line, total cap from the sum) and signed — then
+**run** it: every line is a real purchase through the enforcer, and the auto-generated AG Grid and
+the Bryntum execution board fill with signed receipts and refusals. Lines added *after* the
+signature run into the same walls — over-cap, off-list and over-budget lines come back as signed
+refusals right in the grid. API: `POST /api/journeys`, `POST /api/journeys/:id/approve`,
+`POST /api/journeys/:id/run` (in the contract, APIMatic-linted).
+
 ## The Amex pattern, open-sourced
 
 Amex announced the **Intent Intelligence Framework** at TechCrunch Disrupt 2026: the agent
@@ -151,11 +162,11 @@ Every sponsor prize category is exercised in production, not sprinkled on:
 
 | Sponsor | Where it lives in Carte Blanche |
 |---|---|
-| **AG Grid** | The merchant dispute cockpit (`/dashboard`): live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, pagination, CSV export, persisted column state — plus AG Charts for disputes-by-status and amount-by-reason |
+| **AG Grid** | The merchant dispute cockpit (`/dashboard`): live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, pagination, CSV export, persisted column state — plus AG Charts for disputes-by-status and amount-by-reason, and the **journey grid** (`/planner`): the basket's table auto-generated from its lines, filling with signed outcomes as the run goes |
 | **Render** | The live demo is Render-native: Frankfurt web service, `/healthz` health checks, auto-deploy on commit, Blueprint (`render.yaml`) — including an hourly **cron job** that TSA-anchors the journal on demand (`POST /api/journal/anchor`), keeping the provable-WHEN continuous. Honest note: the free plan has no persistent disk, so the deployed journal lives per-deploy |
-| **Channel3** | The agent's shopping scene (`/api/catalog`): real search across 100M+ retail offers with **per-merchant price comparison** (offers sorted cheapest-first) — loading a cheaper unfamiliar offer into the purchase form is the drift story the mandate stops; prices pinned straight into signed mandates; labeled sample fallback (with sample offers) keeps the demo alive offline |
+| **Channel3** | The agent's shopping scene (`/api/catalog`, **live key connected**): real search across 100M+ retail offers with **per-merchant price comparison** (offers sorted cheapest-first) — loading a cheaper unfamiliar offer into the purchase form is the drift story the mandate stops. The **Journey planner** (`/planner`) builds whole baskets from live catalog lines |
 | **APIMatic** | The contract is **validated and linted by APIMatic's API** — `validation: OK, linting: OK (0 errors)` against their agentic-tools ruleset — and the **TypeScript SDK is generated and checked in** at [`sdk/typescript/`](sdk/typescript) (`npm run apimatic:sync` replays validate → generate → download against their REST API). Portal hosting lands when the APIMatic workspace is connected |
-| **Bryntum** | The deadlines timeline (`/dashboard` → deadlines timeline): every dispute as an event from opened to respond-by, urgency-colored, refreshed live — plus the **TaskBoard** kanban (`/board`): Open → Under review → Waiting → Won/Lost, live over the same feed. One Bryntum bundle per page (their trial UMDs can't share a namespace) |
+| **Bryntum** | The deadlines timeline (`/dashboard` → deadlines timeline): every dispute as an event from opened to respond-by, urgency-colored, refreshed live — the **TaskBoard** kanban (`/board`): Open → Under review → Waiting → Won/Lost — and the **journey execution board** (`/planner`): planned → purchased → refused, live as the run goes. One Bryntum bundle per page (their trial UMDs can't share a namespace) |
 
 ## Architecture
 

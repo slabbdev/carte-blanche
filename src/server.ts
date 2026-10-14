@@ -11,6 +11,7 @@ import { makeRails, makePayPalClient } from "./paypal/adapter.js";
 import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
+import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from "./journey/journey.js";
 import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 import { Channel3Catalog } from "./catalog/channel3.js";
 
@@ -43,6 +44,9 @@ const disputes = new DisputeService({
   enforcer,
   journal,
 });
+// Purchase journeys: planned baskets that derive their own signed mandate and
+// execute line by line through the enforcer (see /planner).
+const journeys = new JourneyPlanner(STATE_DIR, journal);
 
 const app = express();
 app.use(express.json());
@@ -75,7 +79,7 @@ function sessionOf(req: express.Request): { sub: string } | undefined {
   return { sub: session.sub };
 }
 
-const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board"]);
+const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board", "/planner"]);
 app.use((req, res, next) => {
   if (req.method === "GET" && GATED_PAGES.has(req.path) && !sessionOf(req)) {
     return res.redirect("/login?next=" + encodeURIComponent(req.path));
@@ -177,6 +181,114 @@ app.get("/api/mandates", (_req, res) => {
     })),
   );
 });
+
+// --- purchase journeys (the planner: Channel3 lines -> signed mandate -> run) -
+app.get("/api/journeys", (_req, res) => {
+  res.json(journeys.list().map((j) => ({ ...j, total: journeyTotal(j) })));
+});
+
+app.get("/api/journeys/:id", (req, res) => {
+  const j = journeys.get(req.params.id);
+  if (!j) return res.status(404).json({ error: "journey not found" });
+  res.json({ ...j, total: journeyTotal(j) });
+});
+
+app.post("/api/journeys", (req, res) => {
+  const body = req.body as {
+    name?: string;
+    currency?: string;
+    items?: Array<{ title?: string; merchant?: string; price?: string; quantity?: number }>;
+  };
+  const lines = (body.items ?? [])
+    .filter((l) => l.title && l.price && /^\d+(\.\d+)?$/.test(String(l.price)))
+    .map((l) => ({
+      title: String(l.title),
+      ...(l.merchant ? { merchant: String(l.merchant) } : {}),
+      price: String(l.price),
+      quantity: Number(l.quantity) || 1,
+    }));
+  if (lines.length === 0) return res.status(400).json({ error: "at least one line with title and numeric price is required" });
+  const journey = journeys.plan(String(body.name ?? "shopping journey"), String(body.currency ?? "USD"), lines);
+  res.status(201).json({ ...journey, total: journeyTotal(journey) });
+});
+
+app.post("/api/journeys/:id/lines", (req, res) => {
+  const body = req.body as { title?: string; merchant?: string; price?: string; quantity?: number };
+  if (!body.title || !body.price || !/^\d+(\.\d+)?$/.test(String(body.price))) {
+    return res.status(400).json({ error: "title and numeric price are required" });
+  }
+  const j = journeys.addLine(req.params.id, {
+    title: String(body.title),
+    ...(body.merchant ? { merchant: String(body.merchant) } : {}),
+    price: String(body.price),
+    quantity: Number(body.quantity) || 1,
+  });
+  if (!j) return res.status(404).json({ error: "journey not found" });
+  res.json({ ...j, total: journeyTotal(j) });
+});
+
+app.delete("/api/journeys/:id/lines/:lineId", (req, res) => {
+  const j = journeys.removeLine(req.params.id, req.params.lineId);
+  if (!j) return res.status(404).json({ error: "journey or line not found" });
+  res.json({ ...j, total: journeyTotal(j) });
+});
+
+app.delete("/api/journeys/:id", (req, res) => {
+  if (!journeys.remove(req.params.id)) return res.status(404).json({ error: "journey not found" });
+  res.json({ ok: true });
+});
+
+// The human challenge: approving a journey derives a mandate from it — payee
+// allowlist from the lines' merchants, per-purchase cap from the priciest
+// line, total cap from the basket — and signs it. Lines added AFTER this
+// point run into the same signed walls as anything else.
+app.post("/api/journeys/:id/approve", (req, res) => {
+  const j = journeys.get(req.params.id);
+  if (!j) return res.status(404).json({ error: "journey not found" });
+  if (j.mandateId) return res.status(409).json({ error: "journey already approved", mandateId: j.mandateId });
+  if (j.items.length === 0) return res.status(400).json({ error: "nothing to approve — the journey has no lines" });
+  const body = (req.body ?? {}) as { principal?: string; agent?: string };
+  const limits = mandateLimitsFrom(j);
+  const mandate: Mandate = {
+    id: newMandateId(),
+    version: "cb-mandate/v1",
+    principal: String(body.principal ?? "sam (principal)"),
+    agent: String(body.agent ?? "shopping-agent-1"),
+    purpose: `journey: ${j.name}`,
+    limits: {
+      currency: j.currency,
+      maxPerTransaction: limits.maxPerTransaction,
+      maxTotalSpend: limits.maxTotalSpend,
+      payees: limits.payees.length > 0 ? limits.payees : undefined,
+      windowStart: new Date().toISOString(),
+      windowEnd: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString(),
+    },
+    issuedAt: new Date().toISOString(),
+  };
+  const errors = validateMandate(mandate);
+  if (errors.length > 0) return res.status(400).json({ errors });
+  const signed = signMandate(mandate, keys.server.privateKeyB64, keys.server.publicKeyB64);
+  store.put(signed);
+  journal.append("mandate_issued", { mandate_id: mandate.id, principal: mandate.principal, agent: mandate.agent });
+  const approved = journeys.markApproved(j.id, mandate.id);
+  res.json({ ...(approved as typeof j), total: journeyTotal(j), mandate: signed });
+});
+
+// Run: every still-planned line goes through the enforcer, in order. Off-list
+// merchants and over-budget lines come back as signed refusals right in the
+// grid — the basket meets the same walls as any single purchase.
+app.post("/api/journeys/:id/run", async (req, res) => {
+  const j = journeys.get(req.params.id);
+  if (!j) return res.status(404).json({ error: "journey not found" });
+  if (!j.mandateId) return res.status(409).json({ error: "approve the journey first — there is no mandate to spend under" });
+  try {
+    const after = await executeJourney(j, journal, enforcer);
+    res.json({ ...after, total: journeyTotal(after) });
+  } catch (e) {
+    res.status(502).json({ error: `journey execution failed: ${(e as Error).message}` });
+  }
+});
+
 
 app.get("/api/mandates/:id", (req, res) => {
   const signed = store.get(req.params.id);
@@ -427,6 +539,13 @@ app.get("/dashboard", (_req, res) => {
 // share one page (a second bundle silently refuses the populated namespace).
 app.get("/board", (_req, res) => {
   res.sendFile(path.join(webRoot, "board.html"));
+});
+
+// The journey planner hosts the TaskBoard bundle (so /board's constraint holds):
+// Channel3 lines -> signed basket-mandate -> enforcer run, with an AG Grid
+// auto-generated from the lines.
+app.get("/planner", (_req, res) => {
+  res.sendFile(path.join(webRoot, "planner.html"));
 });
 
 // Machine-readable API contract (APIMatic/Redoc/Postman can consume it as-is).

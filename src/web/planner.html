@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Journey planner — Carte Blanche</title>
+<script src="/vendor/ag-grid-community.min.js"></script>
+<link rel="stylesheet" href="/vendor/taskboard/taskboard.css" />
+<link rel="stylesheet" href="/vendor/taskboard/stockholm-light.css" />
+<script src="/vendor/taskboard/taskboard.umd.js"></script>
+<style>
+  :root {
+    --bg: #f2f4f8; --panel: #ffffff; --border: #e7e9ee; --text: #001f33;
+    --muted: #566173; --blue: #0070e0; --navy: #001f33;
+    --green: #00865a; --red: #b42715; --amber: #8a5a00;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --shadow: 0 1px 2px rgba(0, 31, 51, 0.06), 0 1px 6px rgba(0, 31, 51, 0.05);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "PayPal Sans", "Helvetica Neue", Helvetica, Arial, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--blue); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 40; height: 60px; background: #fff;
+            border-bottom: 1px solid var(--border); display: flex; align-items: center;
+            gap: 20px; padding: 0 24px; }
+  .wordmark { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; user-select: none; }
+  .wordmark .pay { color: var(--navy); }
+  .wordmark .pal { color: var(--blue); }
+  .account { display: flex; align-items: center; gap: 10px; padding-left: 20px;
+             border-left: 1px solid var(--border); font-size: 13.5px; color: var(--muted); }
+  .account b { color: var(--text); font-weight: 600; }
+  .envchip { font-size: 10px; font-weight: 800; letter-spacing: 0.8px; color: var(--blue);
+             background: rgba(0, 112, 224, 0.1); border-radius: 4px; padding: 3px 8px; }
+  .statusline { color: var(--muted); font-size: 13px; margin: 8px 0 20px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 30px 80px; }
+  h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.2px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+          padding: 18px 20px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  .card > h2 { font-size: 15px; margin: 0 0 4px; font-weight: 700; }
+  .card > .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+  button { background: var(--blue); border: 0; color: #fff; font-weight: 600; border-radius: 19px;
+           padding: 8px 16px; cursor: pointer; font-size: 13.5px; font-family: inherit; }
+  button:hover { background: #005cb9; }
+  button.ghost { background: #fff; border: 1px solid #c8cdd6; color: var(--text); font-weight: 600; }
+  button.ghost:hover { background: #f5f8fc; border-color: var(--muted); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  input { width: 100%; background: #fff; border: 1px solid #c8cdd6; color: var(--text);
+          border-radius: 8px; padding: 9px 12px; font-size: 13.5px; font-family: inherit; }
+  input:focus { outline: 2px solid rgba(0, 112, 224, 0.35); border-color: var(--blue); }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.2px; }
+  .pill.ok { background: #e2f5ec; color: var(--green); }
+  .pill.no { background: #fdeae6; color: var(--red); }
+  .pill.warn { background: #fdf3d8; color: var(--amber); }
+  .pill.mock { background: #eef0f4; color: var(--muted); }
+  .pill.paypal { background: rgba(0, 112, 224, 0.12); color: var(--blue); }
+  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .empty { color: var(--muted); font-size: 13.5px; font-style: italic; }
+
+  /* channel3 results */
+  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .product { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fff;
+             display: flex; flex-direction: column; gap: 8px; }
+  .product .head { display: flex; gap: 10px; }
+  .product img, .product .ph { width: 52px; height: 52px; object-fit: contain; border-radius: 8px;
+                               background: #f7f9fc; border: 1px solid var(--border); flex: 0 0 52px; }
+  .product .title { font-size: 12.5px; font-weight: 600; line-height: 1.35;
+                    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .product .meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .product .foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+  .product .price { font-weight: 800; font-size: 14.5px; }
+
+  #grid { height: 300px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+          background: #fff; box-shadow: var(--shadow); }
+  .ag-cell .pill { margin: 4px 2px; line-height: 1.4; }
+  #board { background: #fff; border: 1px solid var(--border); border-radius: 10px;
+           padding: 8px; box-shadow: var(--shadow); height: 420px; margin-top: 6px; }
+  .summary { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+  .summary .big { font-size: 22px; font-weight: 800; }
+  .summary .k { font-size: 10.5px; font-weight: 800; letter-spacing: 0.8px; color: var(--muted); text-transform: uppercase; }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="wordmark" href="/"><span class="pay">Carte</span><span class="pal">Blanche</span></a>
+  <span class="account"><b>sandbox-merchant</b> <span class="envchip">SANDBOX</span></span>
+  <span style="margin-left:auto;font-size:13px"><a href="/dashboard">← Resolution Center</a></span>
+</div>
+
+<div class="wrap">
+  <header style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <h1>Journey planner</h1>
+    <span id="sourcePill"></span>
+  </header>
+  <p class="statusline">Plan a basket from the live catalog, approve it once — the mandate is derived
+  and signed from the basket itself — then run it: every line meets the same walls, and the grid
+  fills with signed receipts and refusals.</p>
+
+  <section class="card">
+    <h2>1 · Source lines from the live catalog</h2>
+    <p class="sub" id="catSub">Real products and merchant offers (Channel3). Adding a line stamps its merchant domain and price.</p>
+    <div class="row" style="margin-bottom:12px">
+      <div style="flex:1;min-width:220px"><input id="cat-q" placeholder="Search the catalog… (e.g. mechanical keyboard)" style="border-radius:19px" /></div>
+      <button class="ghost" id="cat-search">Search</button>
+      <span id="cat-source"></span>
+    </div>
+    <div id="cat-results"><div class="empty">search to fill this strip — then add lines to the journey</div></div>
+  </section>
+
+  <section class="card">
+    <h2>2 · The journey</h2>
+    <p class="sub">One basket, one signature. Approving derives the mandate from the basket: payee
+    allowlist from the lines' merchants, per-purchase cap from the priciest line, total cap from the sum.</p>
+    <div class="row" style="margin-bottom:12px">
+      <div style="flex:1;min-width:200px"><label>Journey name</label><input id="j-name" value="team setup, this week" /></div>
+      <span style="align-self:flex-end"><button class="ghost" id="j-new">New journey</button></span>
+      <span style="align-self:flex-end"><button class="ghost" id="j-approve">✓ Approve &amp; sign mandate</button></span>
+      <span style="align-self:flex-end"><button id="j-run" disabled>▶ Run journey</button></span>
+    </div>
+
+    <div id="grid"></div>
+
+    <div class="summary">
+      <div><div class="k">Lines</div><div class="big" id="s-lines">0</div></div>
+      <div><div class="k">Total</div><div class="big" id="s-total">—</div></div>
+      <div><div class="k">Status</div><div id="s-status"><span class="pill mock">no journey yet</span></div></div>
+      <div><div class="k">Mandate</div><div class="mono" id="s-mandate">—</div></div>
+      <div style="margin-left:auto"><a href="/dashboard">disputes →</a> · <a href="/verify">verify →</a></div>
+    </div>
+    <div class="hint" id="j-hint" style="color:var(--muted);font-size:12.5px;margin-top:10px"></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Execution board</h2>
+    <p class="sub">The same lines, as the run sees them — planned, purchased, or refused with the reason.</p>
+    <div id="board"></div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let JOURNEY = null;
+let PRODUCTS = [];
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
+// --- AG Grid: auto-generated from the journey lines ---------------------------
+const gridOptions = {
+  theme: agGrid.themeQuartz.withParams({
+    accentColor: "#0070e0", borderColor: "#e7e9ee", backgroundColor: "#ffffff",
+    foregroundColor: "#001f33", headerTextColor: "#566173", headerBackgroundColor: "#f7f9fc",
+    rowHoverColor: "#f0f6ff", fontFamily: "inherit", fontSize: 13.5,
+    cellHorizontalPadding: 16, rowHeight: 48, wrapperBorderRadius: 0,
+  }),
+  defaultColDef: { sortable: true, resizable: true, flex: 1, minWidth: 90 },
+  columnDefs: [
+    { field: "title", headerName: "Item", minWidth: 220, flex: 2 },
+    { field: "merchant", headerName: "Merchant", minWidth: 130,
+      cellRenderer: (p) => p.value ? '<span class="mono">' + esc(p.value) + "</span>" : "—" },
+    { field: "price", headerName: "Unit", minWidth: 90,
+      valueFormatter: (p) => (p.value ?? "—") + " " + (p.data?.currency ?? "") },
+    { field: "quantity", headerName: "Qty", maxWidth: 80 },
+    { headerName: "Line total", minWidth: 110,
+      valueGetter: (p) => p.data ? lineTotalText(p.data) : "—" },
+    { field: "status", headerName: "Status", minWidth: 120,
+      cellRenderer: (p) => {
+        if (p.value === "receipt") return '<span class="pill ok">PURCHASED</span>';
+        if (p.value === "refused") return '<span class="pill no">REFUSED</span>';
+        return '<span class="pill mock">PLANNED</span>';
+      } },
+    { headerName: "Outcome", minWidth: 150,
+      cellRenderer: (p) => p.data?.outcomeId
+        ? '<a class="mono" href="/verify/' + encodeURIComponent(p.data.outcomeId) + '">' + esc(p.data.outcomeId) + "</a>"
+        : "—" },
+    { field: "detail", headerName: "Detail", minWidth: 200, flex: 1,
+      cellRenderer: (p) => p.value ? '<span style="font-size:12px;color:var(--muted)">' + esc(p.value) + "</span>" : "" },
+  ],
+  rowData: [],
+  pagination: true,
+  paginationPageSize: 10,
+};
+const gridApi = agGrid.createGrid($("grid"), gridOptions);
+
+function lineTotalText(item) {
+  const unit = Number.parseFloat(item.price || "0");
+  const qty = Math.max(1, item.quantity || 1);
+  return (unit * qty).toFixed(2) + " " + (item.currency || "USD");
+}
+
+// --- Bryntum TaskBoard: the same lines, as the run sees them ------------------
+let board = null;
+function renderBoard(items) {
+  const events = (items || []).map((i) => ({
+    id: i.id,
+    name: i.title.length > 34 ? i.title.slice(0, 33) + "…" : i.title,
+    status: i.status === "receipt" ? "purchased" : i.status === "refused" ? "refused" : "planned",
+    eventColor: i.status === "receipt" ? "green" : i.status === "refused" ? "red" : "blue",
+  }));
+  if (board) { board.project.eventStore.data = events; return; }
+  board = new bryntum.taskboard.TaskBoard({
+    appendTo: "board",
+    columns: [
+      { id: "planned", text: "Planned" },
+      { id: "purchased", text: "Purchased" },
+      { id: "refused", text: "Refused" },
+    ],
+    columnField: "status",
+    readOnly: true,
+    project: {
+      events,
+      resources: [{ id: "journey", name: "Journey lines" }],
+    },
+  });
+}
+
+// --- journey state ------------------------------------------------------------
+async function refreshJourney() {
+  const list = await api("/api/journeys");
+  JOURNEY = list[0] ?? null;
+  renderJourney();
+}
+
+function renderJourney() {
+  const items = JOURNEY?.items ?? [];
+  gridApi.setGridOption("rowData", items);
+  renderBoard(items);
+  $("s-lines").textContent = String(items.length);
+  $("s-total").textContent = JOURNEY ? JOURNEY.total + " " + JOURNEY.currency : "—";
+  const approved = Boolean(JOURNEY?.mandateId);
+  $("s-mandate").textContent = JOURNEY?.mandateId ?? "—";
+  $("s-status").innerHTML = !JOURNEY
+    ? '<span class="pill mock">no journey yet</span>'
+    : approved
+      ? '<span class="pill ok">APPROVED</span>'
+      : '<span class="pill warn">DRAFT — approve to sign</span>';
+  $("j-approve").disabled = !JOURNEY || approved || items.length === 0;
+  $("j-run").disabled = !JOURNEY || !approved;
+}
+
+$("j-new").onclick = async () => {
+  try {
+    JOURNEY = await api("/api/journeys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: $("j-name").value, currency: "USD", items: [] }),
+    });
+    $("j-hint").textContent = "";
+    renderJourney();
+  } catch (e) { $("j-hint").textContent = "✗ " + e.message; }
+};
+
+$("j-approve").onclick = async () => {
+  if (!JOURNEY) return;
+  $("j-approve").disabled = true;
+  try {
+    JOURNEY = await api("/api/journeys/" + encodeURIComponent(JOURNEY.id) + "/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: $("j-name").value }),
+    });
+    $("j-hint").textContent = "✓ mandate " + JOURNEY.mandateId + " signed from the basket — adding lines now means they run into its walls.";
+    renderJourney();
+  } catch (e) {
+    $("j-hint").textContent = "✗ " + e.message;
+    $("j-approve").disabled = false;
+  }
+};
+
+$("j-run").onclick = async () => {
+  if (!JOURNEY) return;
+  $("j-run").disabled = true;
+  $("j-hint").textContent = "running the journey through the enforcer…";
+  try {
+    JOURNEY = await api("/api/journeys/" + encodeURIComponent(JOURNEY.id) + "/run", { method: "POST" });
+    const bought = JOURNEY.items.filter((i) => i.status === "receipt").length;
+    const refused = JOURNEY.items.filter((i) => i.status === "refused").length;
+    $("j-hint").textContent = `done — ${bought} purchased, ${refused} refused (each refusal is signed proof). Every outcome is journalled.`;
+    renderJourney();
+  } catch (e) {
+    $("j-hint").textContent = "✗ " + e.message;
+  }
+  $("j-run").disabled = false;
+};
+
+// --- Channel3 source strip -----------------------------------------------------
+$("cat-search").onclick = async () => {
+  const q = $("cat-q").value.trim();
+  $("cat-results").innerHTML = '<div class="empty">searching…</div>';
+  try {
+    const data = await api("/api/catalog?q=" + encodeURIComponent(q));
+    PRODUCTS = data.products ?? [];
+    $("cat-source").innerHTML = data.source === "channel3"
+      ? '<span class="pill paypal">CHANNEL3 LIVE</span>'
+      : '<span class="pill mock">SAMPLE DATA</span>';
+    $("cat-results").innerHTML = PRODUCTS.length
+      ? '<div class="products">' + PRODUCTS.map((p, idx) => `
+        <div class="product">
+          <div class="head">
+            ${p.image ? `<img src="${esc(p.image)}" alt="" referrerpolicy="no-referrer" />` : '<div class="ph"></div>'}
+            <div style="min-width:0">
+              <div class="title">${esc(p.title)}</div>
+              <div class="meta">${esc(p.website ?? "")}${p.rating ? " · ★ " + esc(p.rating) : ""}</div>
+            </div>
+          </div>
+          <div class="foot">
+            <span class="price">${esc(p.price ?? "—")}</span>
+            <span class="meta" style="margin-left:auto">${p.offers.length > 1 ? p.offers.length + " merchants" : ""}</span>
+            <button type="button" class="ghost add-line" data-idx="${idx}">+ add</button>
+          </div>
+        </div>`).join("") + "</div>"
+      : '<div class="empty">no product for that query</div>';
+    document.querySelectorAll(".add-line").forEach((el) => {
+      el.onclick = () => addLine(PRODUCTS[Number(el.dataset.idx)]);
+    });
+  } catch (e) {
+    $("cat-results").innerHTML = '<div class="empty">catalog error: ' + esc(e.message) + "</div>";
+  }
+};
+
+async function addLine(p) {
+  try {
+    if (!JOURNEY) {
+      JOURNEY = await api("/api/journeys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: $("j-name").value || "shopping journey",
+          currency: "USD",
+          items: [{ title: p.title, ...(p.website ? { merchant: p.website } : {}), price: p.price }],
+        }),
+      });
+    } else {
+      JOURNEY = await api("/api/journeys/" + encodeURIComponent(JOURNEY.id) + "/lines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: p.title, ...(p.website ? { merchant: p.website } : {}), price: p.price, quantity: 1 }),
+      });
+    }
+    renderJourney();
+  } catch (e) { $("j-hint").textContent = "✗ " + e.message; }
+}
+
+refreshJourney().catch(() => {});
+</script>
+</body>
+</html>
