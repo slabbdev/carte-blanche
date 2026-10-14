@@ -167,8 +167,13 @@
         </div>
         <div class="row" style="margin-top:14px">
           <button id="m-create">Grant mandate</button>
+          <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:13px;color:var(--text);font-weight:600">
+            <input type="checkbox" id="m-selfsign" style="width:auto;accent-color:var(--blue)" />
+            I keep the keys — sign in this browser (non-custodial)
+          </label>
           <span class="muted" style="font-size:12px">What gets signed is the parse, not the prose — the Amex pattern, open-sourced.</span>
         </div>
+        <div id="selfsign-note" class="hint" style="display:none;color:var(--green);margin-top:8px"></div>
       </section>
 
       <section class="card">
@@ -264,11 +269,18 @@ async function refreshMandates() {
   const previous = sel.value;
   sel.innerHTML = '<option value="">—</option>' + list.map((m) => `<option value="${esc(m.mandate.id)}">${esc(m.mandate.id)}</option>`).join("");
   sel.value = list.some((m) => m.mandate.id === previous) ? previous : (list[0]?.mandate.id ?? "");
+  // which mandates were signed by THIS browser's keys?
+  const mine = new Set();
+  for (const m of list) {
+    const fp = (await sha256Hex(m.publicKey)).slice(0, 12);
+    if (myKeyFingerprints.includes(fp)) mine.add(m.mandate.id);
+  }
   $("mandates").innerHTML = list.length === 0 ? '<div class="empty">none yet</div>' : list.map((m) => `
     <div class="card-item">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <span class="mono">${esc(m.mandate.id)}</span>
         ${m.revoked ? '<span class="pill no">REVOKED</span>' : '<span class="pill ok">ACTIVE</span>'}
+        ${mine.has(m.mandate.id) ? '<span class="pill paypal">YOUR KEY</span>' : ""}
         <span style="margin-left:auto"><button class="danger" onclick="revoke('${esc(m.mandate.id)}')">Revoke</button></span>
       </div>
       <div class="mono" style="margin-top:4px">${esc(m.mandate.principal)} → ${esc(m.mandate.agent)} · ${esc(m.mandate.purpose)}</div>
@@ -296,13 +308,67 @@ async function refreshOutcomes() {
     </div>`).join("");
 }
 
+// --- non-custodial signing: the principal's key never leaves this tab ---------
+const te = new TextEncoder();
+function canonicalJson(v) {
+  if (v === null || v === undefined) return "null";
+  const t = typeof v;
+  if (t === "string" || t === "number" || t === "boolean") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(canonicalJson).join(",") + "]";
+  if (t === "object") {
+    const e = Object.entries(v).filter(([, x]) => x !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return "{" + e.map(([k, x]) => JSON.stringify(k) + ":" + canonicalJson(x)).join(",") + "}";
+  }
+  throw new Error("unsupported");
+}
+const bytesToB64 = (bytes) => btoa(String.fromCharCode(...bytes));
+async function sha256Hex(s) {
+  const d = await crypto.subtle.digest("SHA-256", te.encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+let myKeyFingerprints = JSON.parse(sessionStorage.getItem("cb-my-keys") || "[]");
+
+$("m-selfsign").addEventListener("change", () => {
+  const on = $("m-selfsign").checked;
+  $("selfsign-note").style.display = on ? "block" : "none";
+  $("selfsign-note").textContent = on
+    ? "Non-custodial: an Ed25519 keypair is generated IN THIS TAB. The mandate is signed locally; the server verifies your signature and stores the public key — it never sees your private key and cannot forge the mandate."
+    : "";
+});
+
 $("m-create").onclick = async () => {
   try {
     const payees = $("m-payees").value.split(",").map((s) => s.trim()).filter(Boolean);
-    await api("/api/mandates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let body;
+    if ($("m-selfsign").checked) {
+      const kp = await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"]);
+      const mandate = {
+        id: "cbmd-" + crypto.randomUUID(),
+        version: "cb-mandate/v1",
+        principal: $("m-principal").value || "anonymous",
+        agent: $("m-agent").value || "unnamed-agent",
+        purpose: $("m-purpose").value || "unspecified",
+        limits: {
+          currency: $("m-currency").value,
+          maxPerTransaction: $("m-maxtx").value,
+          maxTotalSpend: $("m-maxtotal").value,
+          ...(payees.length ? { payees } : {}),
+          windowStart: new Date().toISOString(),
+          windowEnd: new Date($("m-windowend").value).toISOString(),
+        },
+        issuedAt: new Date().toISOString(),
+      };
+      const signature = bytesToB64(new Uint8Array(
+        await crypto.subtle.sign("Ed25519", kp.privateKey, te.encode(canonicalJson(mandate)))
+      ));
+      const pubSpki = bytesToB64(new Uint8Array(await crypto.subtle.exportKey("spki", kp.publicKey)));
+      const fp = (await sha256Hex(pubSpki)).slice(0, 12);
+      myKeyFingerprints.push(fp);
+      sessionStorage.setItem("cb-my-keys", JSON.stringify(myKeyFingerprints));
+      body = { mandate, signature, publicKey: pubSpki };
+      sessionStorage.setItem("cb-last-signed", JSON.stringify({ mandateId: mandate.id, fp }));
+    } else {
+      body = {
         principal: $("m-principal").value,
         agent: $("m-agent").value,
         purpose: $("m-purpose").value,
@@ -311,8 +377,14 @@ $("m-create").onclick = async () => {
         max_total_spend: $("m-maxtotal").value,
         payees,
         window_end: new Date($("m-windowend").value).toISOString(),
-      }),
-    });
+      };
+    }
+    await api("/api/mandates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if ($("m-selfsign").checked) {
+      const last = JSON.parse(sessionStorage.getItem("cb-last-signed") || "{}");
+      $("j-hint") && 0;
+      $("selfsign-note").innerHTML = '✓ mandate <span class="mono">' + esc(last.mandateId || "") + '</span> signed by <b>your</b> browser key <span class="mono">' + esc(last.fp || "") + "</span> — the server verified it and cannot forge it.";
+    }
     await refreshMandates();
   } catch (e) { alert(e.message); }
 };

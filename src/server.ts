@@ -7,6 +7,8 @@ import { Journal } from "./journal/journal.js";
 import { MandateStore } from "./mandate/store.js";
 import { newMandateId, validateMandate, type Mandate } from "./mandate/mandate.js";
 import { signMandate } from "./mandate/signing.js";
+import { verifyCanonical } from "./lib/sign.js";
+import type { SignedMandate } from "./mandate/mandate.js";
 import { makeRails, makePayPalClient } from "./paypal/adapter.js";
 import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
@@ -148,30 +150,63 @@ interface CreateMandateBody {
   window_end?: string;
 }
 
+// Two issuance modes. Custodial (default): the server derives and signs the
+// mandate with its own key. NON-CUSTODIAL: the caller brings a mandate already
+// signed with THEIR Ed25519 key (the console signs it in the browser via
+// WebCrypto) — the server verifies the signature against the caller's public
+// key before storing anything, and journals rejected attempts as evidence.
+// The enforcement path is identical: verifyMandate re-checks the stored
+// signature, whoever holds it. "You keep the keys", literally.
 app.post("/api/mandates", (req, res) => {
-  const body = req.body as CreateMandateBody;
-  const currency = (body.currency ?? "USD").toUpperCase();
-  const mandate: Mandate = {
-    id: newMandateId(),
-    version: "cb-mandate/v1",
-    principal: String(body.principal ?? "anonymous"),
-    agent: String(body.agent ?? "unnamed-agent"),
-    purpose: String(body.purpose ?? "unspecified"),
-    limits: {
-      currency,
-      maxPerTransaction: String(body.max_per_transaction ?? "0.00"),
-      maxTotalSpend: String(body.max_total_spend ?? "0.00"),
-      payees: Array.isArray(body.payees) && body.payees.length > 0 ? body.payees.map(String) : undefined,
-      windowStart: new Date().toISOString(),
-      windowEnd: String(body.window_end ?? new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()),
-    },
-    issuedAt: new Date().toISOString(),
-  };
-  const errors = validateMandate(mandate);
-  if (errors.length > 0) return res.status(400).json({ errors });
-  const signed = signMandate(mandate, keys.server.privateKeyB64, keys.server.publicKeyB64);
+  const body = req.body as CreateMandateBody & { mandate?: Mandate; signature?: string; publicKey?: string };
+  let signed: SignedMandate;
+  let signing: "server-custodial" | "client-held-key";
+
+  if (body.mandate && body.signature && body.publicKey) {
+    const errors = validateMandate(body.mandate);
+    if (errors.length > 0) return res.status(400).json({ errors });
+    if (!verifyCanonical(body.publicKey, body.mandate, body.signature)) {
+      journal.append("mandate_rejected", {
+        reason: "client signature does not verify",
+        principal: body.mandate.principal,
+        agent: body.mandate.agent,
+        public_key: body.publicKey.slice(0, 24),
+      });
+      return res.status(400).json({ error: "client signature does not verify — mandate not stored" });
+    }
+    signed = { mandate: body.mandate, signature: body.signature, publicKey: body.publicKey };
+    signing = "client-held-key";
+  } else {
+    const currency = (body.currency ?? "USD").toUpperCase();
+    const mandate: Mandate = {
+      id: newMandateId(),
+      version: "cb-mandate/v1",
+      principal: String(body.principal ?? "anonymous"),
+      agent: String(body.agent ?? "unnamed-agent"),
+      purpose: String(body.purpose ?? "unspecified"),
+      limits: {
+        currency,
+        maxPerTransaction: String(body.max_per_transaction ?? "0.00"),
+        maxTotalSpend: String(body.max_total_spend ?? "0.00"),
+        payees: Array.isArray(body.payees) && body.payees.length > 0 ? body.payees.map(String) : undefined,
+        windowStart: new Date().toISOString(),
+        windowEnd: String(body.window_end ?? new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()),
+      },
+      issuedAt: new Date().toISOString(),
+    };
+    const errors = validateMandate(mandate);
+    if (errors.length > 0) return res.status(400).json({ errors });
+    signed = signMandate(mandate, keys.server.privateKeyB64, keys.server.publicKeyB64);
+    signing = "server-custodial";
+  }
+
   store.put(signed);
-  journal.append("mandate_issued", { mandate_id: mandate.id, principal: mandate.principal, agent: mandate.agent });
+  journal.append("mandate_issued", {
+    mandate_id: signed.mandate.id,
+    principal: signed.mandate.principal,
+    agent: signed.mandate.agent,
+    signing,
+  });
   res.status(201).json(signed);
 });
 

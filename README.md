@@ -254,8 +254,7 @@ npm run wallet2:watch -- --logical-key <key>   # capture + receipt when approved
 
 ## Security model (v0, stated plainly)
 
-- The server acts as **custodial principal** (it signs mandates with its own key). Non-custodial
-  signing (principal-held keys, browser wallet) is on the roadmap.
+- Custodial by default (the server signs mandates with its own key) — but **non-custodial is live**: check "I keep the keys" and the mandate is signed in your browser with a WebCrypto Ed25519 key; the server only verifies. Both modes flow through identical enforcement and verification.
 - Mandates are immutable; only revocation changes behavior, and revocations are journalled.
 - Amounts are decimal strings compared in minor units (bigint) — no floats in the auth path.
 - Keys live in `KEYS_DIR` (0600), state in `STATE_DIR`; both are gitignored.
@@ -272,7 +271,7 @@ npm run wallet2:watch -- --logical-key <key>   # capture + receipt when approved
    colored by urgency (red ≤ 3 days) — the whole 10-day window at a glance, live from the SSE feed.
 3. **S4a ✓** — Merkle inclusion proofs + signed tree heads on every receipt (portable commitment).
 4. **S4b ✓** — RFC 3161 TSA anchoring of tree heads (`npm run anchor`; openssl-verified by third parties).
-5. **S5** — principal-held keys (non-custodial mandates), AP2/VC-style mandate format.
+5. **S5 ✓** — principal-held keys: check **"I keep the keys"** in the console and the mandate is Ed25519-signed *in your browser* (WebCrypto) — the server verifies your signature and stores your public key, but never sees your private key and cannot forge the mandate. Enforcement and verification paths are unchanged: whoever holds the key, the walls hold.
 
 ## Status
 

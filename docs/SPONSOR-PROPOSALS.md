@@ -24,6 +24,24 @@ evidence pack, deterministic request ids (the double-spend trap), all on their O
 plus the Amex Intent Intelligence pattern proven implementable on PayPal today, which turns a
 competitor's keynote into a feature PayPal can ship without a card network.
 
+**Why they organized this hackathon (the honest read).** Not cheaper R&D — cheaper *optionality
+and outside eyes*. PayPal cannot publicly say "we don't know how to underwrite an agent"; a
+hackathon lets 500 teams probe their rails and surface the missing primitives (ours found two:
+no approval hooks, client-level idempotence = double-spend) at the price of two engineers, while
+keeping every experiment running ON PayPal rails instead of a competitor's. The winning narrative
+for them is inversion: agents paying via PayPal are **more** accountable than humans —
+cryptographic intent plus sealed evidence beats behavioral vibes. Everything below feeds that.
+
+**PayPal's products of tomorrow, prototyped today (no wheel reinvented — all on Orders v2 + Disputes):**
+
+| Tomorrow's PayPal surface (plausible) | Prototyped in Carte Blanche |
+|---|---|
+| **PayPal Agent Mandates** — a spending-authority object the buyer signs, the agent presents, the rail verifies | `cb-mandate/v1`: immutable, revocable, Ed25519-signed — and since S5, signable **by the buyer's own browser key** (non-custodial) |
+| **PayPal Agent Keys** — buyers hold their agent's spending key, PayPal only verifies | live today: "I keep the keys" in the console generates a WebCrypto keypair in the tab; the server verifies the signature and journals rejected forgeries |
+| **Agent dispute category with evidence packs** — "my agent did it" needs its own dispute semantics and an evidence standard | evidence packs bundling the signed mandate, receipts, refusals and chain verification, wired to `provide-evidence` |
+| **Agent spending statements** — a buyer-visible audit of everything their agent did | the sealed journal + public `/verify/:id` + the journalled agent memory |
+| **"Agents are safer than humans" narrative** — crypto intent > behavioral signals | the drift demos: cheaper-elsewhere, over-cap, off-list, replay — each stopped by signed proof |
+
 **What we propose to hand them.**
 1. **The pattern document** — "Intent-scoped payments on PayPal rails": the 5-stage pattern, the
    refusal semantics, the evidence chain, written so a PayPal PM could turn it into a roadmap item.
@@ -31,6 +49,9 @@ competitor's keynote into a feature PayPal can ship without a card network.
 2. **The MCP server** (`mcp/server.ts`) — agents everywhere can spend under PayPal mandates from
    Claude Desktop or any MCP client, with receipts. This positions PayPal rails as the *default
    safe rail for the agent ecosystem* rather than one SDK among many.
+2b. **Non-custodial Agent Keys** (new, S5): the buyer's Ed25519 key lives in their browser; the
+   platform verifies but cannot forge mandates. For PayPal this is the liability answer — the
+   authority is provably the buyer's, not the middleware's.
 3. **The evidence standard** — refusals-as-signed-proof + journalled agent memory is a proposal for
    what agent-payment *auditability* should mean. Free to adopt.
 
