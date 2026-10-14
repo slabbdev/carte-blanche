@@ -108,7 +108,12 @@ Every id and capture then comes from the PayPal sandbox REST API (Orders v2).
 Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchase`, `my_artifacts`,
 `verify_artifact`, `recall_preferences`/`save_preference`, `plan_journey`/`approve_journey`/
 `run_journey`… — all funnelled through the same enforcer: the model gets a signed receipt or a
-signed refusal, never rail access. Point `CB_BASE_URL` at any instance. Agent-readable API map at
+signed refusal, never rail access. Point `CB_BASE_URL` at any instance.
+
+Compare with PayPal's own official MCP server (`@paypal/mcp`): it gives agents `create_order`,
+`pay_order`, `create_refund` — with nothing but an access token. No mandates, no limits, no
+enforcement, no evidence. **Their server gives agents the keys; ours gives them the walls** — and
+the two compose in one Claude Desktop config. Agent-readable API map at
 [`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
 
 ## Agent-purchase detection — labeled on PayPal's own records

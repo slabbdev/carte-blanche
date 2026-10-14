@@ -57,8 +57,18 @@ cryptographic intent plus sealed evidence beats behavioral vibes. Everything bel
 3. **The evidence standard** — refusals-as-signed-proof + journalled agent memory is a proposal for
    what agent-payment *auditability* should mean. Free to adopt.
 
-**The ask:** feedback from the disputes/risk team, and a nudge on which of the three they'd want
-productized first.
+**The smoking gun — their own MCP server proves the gap.** PayPal ships an official MCP server
+(`@paypal/mcp`, github.com/paypal/paypal-mcp-server) so agents can call their APIs from Claude
+Desktop or Cursor. Its tool list: `create_order`, `pay_order`, `create_refund`, invoices,
+subscriptions, shipment tracking, `list_transactions` — **an agent can move money with nothing but
+an access token.** No mandates. No spending limits. No intent signing. No enforcement. No evidence.
+No refusal semantics. Their own agent surface is a walking blank check — the exact problem this
+project exists to close, confirmed by their own product. And it makes the two servers a natural
+pair: **theirs moves money, ours makes it accountable** (same protocol, composable in one Claude
+Desktop config — their `create_order` becomes safe the moment it flows under one of our mandates).
+
+**What we propose to hand them.**
+1. **The pattern document**
 
 ---
 

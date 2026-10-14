@@ -50,6 +50,7 @@ const disputes = new DisputeService({
 });
 // Purchase journeys: planned baskets that derive their own signed mandate and
 // execute line by line through the enforcer (see /planner).
+const paypal = makePayPalClient(process.env); // shared REST client (disputes + webhook verification)
 const journeys = new JourneyPlanner(STATE_DIR, journal);
 // The agent's journalled memory: what it knows about its principal, auditable like everything else.
 const preferences = new PreferenceStore(STATE_DIR, journal);
@@ -324,6 +325,48 @@ app.get("/api/agents/:agent/track-record", (req, res) => {
   const agent = req.params.agent.trim();
   if (!agent) return res.status(400).json({ error: "agent name is required" });
   res.json(trackRecords.statementFor(agent));
+});
+
+// --- PayPal webhooks: PayPal CONFIRMS what our journal claims ----------------
+// When a capture completes, PayPal pushes the event here. We parse our agent
+// marker out of custom_id and journal it as paypal-confirmed evidence — so the
+// agent track record is no longer self-reported only: the rail itself co-signs
+// the story. Signature verification runs when PAYPAL_WEBHOOK_ID is configured;
+// otherwise the event is journalled with verified:false (honest, not trusted).
+app.post("/api/webhooks/paypal", async (req, res) => {
+  const event = req.body as {
+    id?: string;
+    event_type?: string;
+    resource?: { id?: string; custom_id?: string; amount?: { value?: string; currency_code?: string } };
+  } | undefined;
+  if (!event?.event_type) return res.status(400).json({ error: "not a PayPal webhook event" });
+
+  const customId = event.resource?.custom_id ?? "";
+  const markerMatch = /^cb\|agent=([^|]+)\|mandate=([^|]+)/.exec(customId);
+  let verified = false;
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+  if (webhookId && paypal) {
+    try {
+      const headers = Object.fromEntries(
+        Object.entries(req.headers).map(([k, v]) => [k.toLowerCase(), Array.isArray(v) ? String(v[0]) : String(v ?? "")]),
+      );
+      verified = await paypal.verifyWebhookSignature(req.body as Record<string, unknown>, headers, webhookId);
+    } catch {
+      verified = false;
+    }
+  }
+
+  journal.append("paypal_webhook", {
+    event_id: event.id ?? "",
+    event_type: event.event_type,
+    resource_id: event.resource?.id ?? "",
+    amount: event.resource?.amount ?? null,
+    custom_id: customId.slice(0, 200) || null,
+    ...(markerMatch ? { agent: markerMatch[1], mandate_id: markerMatch[2] } : {}),
+    verified,
+    verification: webhookId ? "paypal verify-webhook-signature" : "skipped (PAYPAL_WEBHOOK_ID not set)",
+  });
+  res.json({ received: true });
 });
 
 // --- agent memory: journalled preferences the agent (and any MCP client) reads/writes

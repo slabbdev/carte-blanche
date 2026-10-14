@@ -142,6 +142,25 @@ export class PayPalClient {
   }
 
   /**
+   * Verify a webhook transmission against PayPal's certificate chain.
+   * Returns true only when PayPal itself says the signature is genuine —
+   * this is what makes a webhook a PayPal-CONFIRMED event rather than a
+   * self-reported one.
+   */
+  async verifyWebhookSignature(event: Record<string, unknown>, headers: Record<string, string>, webhookId: string): Promise<boolean> {
+    const res = await this.request("POST", "/v1/notifications/verify-webhook-signature", {
+      auth_algo: headers["paypal-auth-algo"],
+      cert_url: headers["paypal-cert-url"],
+      transmission_id: headers["paypal-transmission-id"],
+      transmission_sig: headers["paypal-transmission-sig"],
+      transmission_time: headers["paypal-transmission-time"],
+      webhook_id: webhookId,
+      webhook_event: event,
+    }, undefined);
+    return res.ok && (res.data as { verification_status?: string })?.verification_status === "SUCCESS";
+  }
+
+  /**
    * Transaction Search (v1/reporting/transactions): PayPal's own record of
    * captured transactions. Each entry carries `custom_field` — the custom_id
    * we stamped at order creation — which is how agent purchases become
