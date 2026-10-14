@@ -132,8 +132,9 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/catalog", async (req, res) => {
   const q = String(req.query.q ?? "").slice(0, 120);
+  const pageToken = req.query.page_token ? String(req.query.page_token).slice(0, 200) : undefined;
   try {
-    res.json(await catalog.search(q));
+    res.json(await catalog.search(q, 6, pageToken));
   } catch (e) {
     res.status(502).json({ error: `catalog unavailable: ${(e as Error).message}` });
   }

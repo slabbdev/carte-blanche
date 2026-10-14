@@ -34,6 +34,8 @@ export interface CatalogProduct {
 export interface CatalogResult {
   source: "channel3" | "sample";
   products: CatalogProduct[];
+  /** Channel3 pagination cursor — pass back to search() for the next page. */
+  nextPageToken?: string;
   error?: string;
 }
 
@@ -143,25 +145,26 @@ export class Channel3Catalog {
     return Boolean(this.apiKey);
   }
 
-  async search(query: string, limit = 6): Promise<CatalogResult> {
-    if (!this.enabled) return { source: "sample", products: sampleProducts(query) };
+  async search(query: string, limit = 6, pageToken?: string): Promise<CatalogResult> {
+    if (!this.enabled) return { source: "sample", products: sampleProducts(query, pageToken) };
     try {
       const { status, json } = await this.transport.post(
         `${this.baseUrl}/v1/search`,
-        { query, limit },
+        { query, limit, ...(pageToken ? { page_token: pageToken } : {}) },
         this.apiKey as string,
         this.timeoutMs,
       );
       if (status !== 200) {
-        return { source: "sample", products: sampleProducts(query), error: `channel3 http ${status}` };
+        return { source: "sample", products: sampleProducts(query, pageToken), error: `channel3 http ${status}` };
       }
       const products = (Array.isArray((json as { products?: RawProduct[] }).products) ? (json as { products: RawProduct[] }).products : [])
         .map(mapProduct)
         .filter((p): p is CatalogProduct => Boolean(p));
-      return { source: "channel3", products };
+      const next = (json as { next_page_token?: string }).next_page_token;
+      return { source: "channel3", products, ...(next ? { nextPageToken: next } : {}) };
     } catch (err) {
       // The shopping scene must keep working offline — say what happened, fall back.
-      return { source: "sample", products: sampleProducts(query), error: (err as Error).message };
+      return { source: "sample", products: sampleProducts(query, pageToken), error: (err as Error).message };
     }
   }
 }
@@ -169,7 +172,7 @@ export class Channel3Catalog {
 /** Deterministic offline products, visibly labeled "sample" in the console.
  *  Samples carry multiple merchant offers so the price-comparison (and the
  *  cheaper-but-unauthorized drift story) demos without an API key. */
-export function sampleProducts(query: string): CatalogProduct[] {
+export function sampleProducts(query: string, _pageToken?: string): CatalogProduct[] {
   const q = query.trim().toLowerCase();
   const all: CatalogProduct[] = [
     { id: "sample-coffee-1", title: "Sample: single-origin coffee beans 1kg", price: "24.00", currency: "USD", description: "offline sample product", offers: [
