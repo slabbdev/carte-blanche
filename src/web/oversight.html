@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>My agents — Carte Blanche</title>
+<style>
+  :root {
+    --bg: #f2f4f8; --panel: #ffffff; --border: #e7e9ee; --text: #001f33;
+    --muted: #566173; --blue: #0070e0; --navy: #001f33;
+    --green: #00865a; --red: #b42715; --amber: #8a5a00;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --shadow: 0 1px 2px rgba(0, 31, 51, 0.06), 0 1px 6px rgba(0, 31, 51, 0.05);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "PayPal Sans", "Helvetica Neue", Helvetica, Arial, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--blue); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 40; height: 60px; background: #fff;
+            border-bottom: 1px solid var(--border); display: flex; align-items: center;
+            gap: 20px; padding: 0 24px; }
+  .wordmark { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; user-select: none; }
+  .wordmark .pay { color: var(--navy); }
+  .wordmark .pal { color: var(--blue); }
+  .account { display: flex; align-items: center; gap: 10px; padding-left: 20px;
+             border-left: 1px solid var(--border); font-size: 13.5px; color: var(--muted); }
+  .account b { color: var(--text); font-weight: 600; }
+  .envchip { font-size: 10px; font-weight: 800; letter-spacing: 0.8px; color: var(--blue);
+             background: rgba(0, 112, 224, 0.1); border-radius: 4px; padding: 3px 8px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 30px 80px; }
+  h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.2px; }
+  .statusline { color: var(--muted); font-size: 13px; margin: 8px 0 22px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+          padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .card > h2 { font-size: 15px; margin: 0 0 4px; font-weight: 700; }
+  .card > .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+  .agent { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .agent h3 { margin: 0 0 10px; font-size: 15px; }
+  .stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 10px 0; }
+  .stat .k { font-size: 10.5px; font-weight: 800; letter-spacing: 0.8px; color: var(--muted); text-transform: uppercase; }
+  .stat .v { font-size: 19px; font-weight: 800; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.2px; }
+  .pill.ok { background: #e2f5ec; color: var(--green); }
+  .pill.no { background: #fdeae6; color: var(--red); }
+  .pill.warn { background: #fdf3d8; color: var(--amber); }
+  .pill.mock { background: #eef0f4; color: var(--muted); }
+  .pill.paypal { background: rgba(0, 112, 224, 0.12); color: var(--blue); }
+  .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); font-style: italic; font-size: 13.5px; }
+  button { background: var(--blue); border: 0; color: #fff; font-weight: 600; border-radius: 19px;
+           padding: 8px 16px; cursor: pointer; font-size: 13.5px; font-family: inherit; }
+  button:hover { background: #005cb9; }
+  button.ghost { background: #fff; border: 1px solid #c8cdd6; color: var(--text); font-weight: 600; }
+  button.ghost:hover { background: #f5f8fc; border-color: var(--muted); }
+  button.stop { background: #fff; border: 1px solid #eec4bc; color: var(--red); font-weight: 700; }
+  button.stop:hover { background: #fdeae6; }
+  .mandate-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px dashed var(--border); font-size: 13px; }
+  .feed { font-size: 12.5px; }
+  .feed div { padding: 5px 0; border-top: 1px solid var(--border); }
+  .feed div:first-child { border-top: 0; }
+  .feed .t { color: var(--muted); font-family: var(--mono); font-size: 11px; margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="wordmark" href="/"><span class="pay">Carte</span><span class="pal">Blanche</span></a>
+  <span class="account"><b>sam (principal)</b> <span class="envchip">SANDBOX</span></span>
+  <span style="margin-left:auto;font-size:13px"><a href="/dashboard">← Resolution Center</a></span>
+</div>
+
+<div class="wrap">
+  <header><h1>My agents</h1></header>
+  <p class="statusline">The buyer's view: what your agents spent, what they remember about you,
+  which walls held — and the switch that ends their authority instantly. This is the oversight tab
+  PayPal's buyer app would grow.</p>
+  <div id="agents"><div class="empty">loading…</div></div>
+
+  <section class="card">
+    <h2>Recent activity (sealed journal)</h2>
+    <p class="sub">Every event your agents caused — hashes chained, tamper-evident, publicly verifiable.</p>
+    <div class="feed" id="feed"><div class="empty">loading…</div></div>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Verify any artifact at <a href="/verify">/verify</a> — no account needed.</p>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
+async function main() {
+  const [mandates, prefs] = await Promise.all([
+    api("/api/mandates"),
+    api("/api/agent/preferences").catch(() => ({ preferences: {}, notes: [] })),
+  ]);
+
+  // group mandates by agent
+  const byAgent = new Map();
+  for (const m of mandates) {
+    const a = m.mandate.agent;
+    if (!byAgent.has(a)) byAgent.set(a, []);
+    byAgent.get(a).push(m);
+  }
+
+  const cards = [];
+  for (const [agent, list] of byAgent) {
+    let tr = null;
+    try { tr = await api("/api/agents/" + encodeURIComponent(agent) + "/track-record"); } catch { /* keep null */ }
+    const captured = (tr?.captured ?? []).map((c) => "<b>" + esc(c.amount) + " " + esc(c.currency) + "</b>").join(" + ") || "—";
+    const refusalChips = (tr?.refusals ?? []).map((r) => '<span class="pill warn">' + esc(r.code) + " × " + r.count + "</span>").join(" ") || '<span class="pill mock">none</span>';
+    const mandateRows = list.map((m) => `
+      <div class="mandate-row">
+        <span class="mono">${esc(m.mandate.id)}</span>
+        ${m.revoked ? '<span class="pill no">REVOKED</span>' : '<span class="pill ok">ACTIVE</span>'}
+        <span class="muted">${esc(m.mandate.purpose)}</span>
+        <span>max ${esc(m.mandate.limits.maxPerTransaction)} ${esc(m.mandate.limits.currency)} / tx · total ${esc(m.mandate.limits.maxTotalSpend)}</span>
+        <span style="margin-left:auto">${m.revoked ? "" : '<button class="stop" onclick="stopAgent(\'' + esc(m.mandate.id) + '\')">✕ STOP</button>'}</span>
+      </div>`).join("");
+
+    cards.push(`
+      <div class="agent">
+        <h3>${esc(agent)}</h3>
+        <div class="stats">
+          <div class="stat"><div class="k">Mandates</div><div class="v">${list.length}</div></div>
+          <div class="stat"><div class="k">Purchases</div><div class="v">${tr?.purchasesCaptured ?? "—"}</div></div>
+          <div class="stat"><div class="k">Captured spend</div><div class="v">${captured}</div></div>
+          <div class="stat"><div class="k">Walls that held</div><div class="v" style="font-size:13px;line-height:2">${refusalChips}</div></div>
+        </div>
+        ${prefs.notes.length || Object.keys(prefs.preferences).length ? `
+        <div class="muted" style="font-size:12.5px;margin-bottom:8px">
+          🧠 Remembers about you: ${Object.entries(prefs.preferences).map(([k, v]) => esc(k) + " = " + esc(v)).join(" · ") || "—"}
+          ${prefs.notes.length ? " · notes: " + prefs.notes.map((n) => esc(n)).join(" / ") : ""}
+          <span class="pill mock">journalled</span>
+        </div>` : ""}
+        ${mandateRows}
+      </div>`);
+  }
+  $("agents").innerHTML = cards.length ? cards.join("") : '<div class="empty">No agents yet — grant a mandate in the <a href="/">console</a>.</div>';
+
+  const feed = await api("/api/journal/events?limit=25");
+  $("feed").innerHTML = (feed.events ?? []).slice().reverse().map((e) =>
+    `<div><span class="t">${esc(e.ts.replace("T", " ").slice(0, 19))}</span><b>${esc(e.type)}</b> <span class="mono">${esc(JSON.stringify(e.data).slice(0, 110))}…</span></div>`
+  ).join("");
+}
+
+window.stopAgent = async (mandateId) => {
+  if (!confirm("STOP this mandate? The agent loses ALL authority under it, immediately and irreversibly (revocation is journalled).")) return;
+  await api(`/api/mandates/${encodeURIComponent(mandateId)}/revoke`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "stopped by principal from oversight" }),
+  });
+  main().catch(() => {});
+};
+
+main().catch((e) => { $("agents").innerHTML = '<div class="empty">✗ ' + esc(e.message) + "</div>"; });
+</script>
+</body>
+</html>

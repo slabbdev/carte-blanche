@@ -88,7 +88,7 @@ function sessionOf(req: express.Request): { sub: string } | undefined {
   return { sub: session.sub };
 }
 
-const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board", "/planner"]);
+const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board", "/planner", "/oversight"]);
 app.use((req, res, next) => {
   if (req.method === "GET" && GATED_PAGES.has(req.path) && !sessionOf(req)) {
     return res.redirect("/login?next=" + encodeURIComponent(req.path));
@@ -614,6 +614,11 @@ app.get("/board", (_req, res) => {
 // auto-generated from the lines.
 app.get("/planner", (_req, res) => {
   res.sendFile(path.join(webRoot, "planner.html"));
+});
+
+// The buyer's oversight tab: spend, memory, walls honored — and the STOP switch.
+app.get("/oversight", (_req, res) => {
+  res.sendFile(path.join(webRoot, "oversight.html"));
 });
 
 // Machine-readable API contract (APIMatic/Redoc/Postman can consume it as-is).

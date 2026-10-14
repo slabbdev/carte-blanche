@@ -111,6 +111,15 @@ Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchas
 signed refusal, never rail access. Point `CB_BASE_URL` at any instance. Agent-readable API map at
 [`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
 
+## My agents — the buyer's oversight tab
+
+`/oversight` is the buyer-side view PayPal's app would grow: per agent — spend captured, purchases,
+**walls that held** (refusals by reason), what the agent remembers about you (journalled), every
+mandate with its limits — and one **STOP** button that ends an agent's authority instantly
+(revocation is journalled). Below it, the sealed-journal feed of everything the agents caused.
+Grant → act under walls → oversee → stop: the full loop a buyer actually needs before delegating
+money to software.
+
 ## Agent track record — refusals as reputation
 
 `GET /api/agents/:agent/track-record` computes what an agent DID from the sealed chain — mandates
