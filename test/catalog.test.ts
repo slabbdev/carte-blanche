@@ -43,6 +43,44 @@ describe("Channel3 catalog", () => {
     expect(res.products[0].image).toBe("http://x/clean.jpg");
   });
 
+  it("maps the real search-response shape (price object, domain merchant, buy link, ratings)", async () => {
+    const raw = {
+      products: [
+        {
+          id: "xVwjdeU",
+          title: "Redragon Antonium K745 Pro",
+          description: "full-size wired mechanical keyboard",
+          ratings: { value: 5.0, count: 6, source_count: 1 },
+          offers: [
+            {
+              url: "https://buy.trychannel3.com/xVwjdeU?o=01M0",
+              domain: "redragonshop.com",
+              price: { price: 49.99, compare_at_price: null, currency: "USD" },
+              availability: "InStock",
+              condition: "new",
+            },
+            {
+              url: "https://buy.trychannel3.com/xVwjdeU?o=01M1",
+              domain: "keychron.com",
+              price: { price: 45.5, currency: "USD" },
+            },
+          ],
+          images: [{ cleaned_url: "https://img.example/clean.jpg", is_main_image: false }],
+        },
+      ],
+    };
+    const client = new Channel3Catalog("key", { async post() { return { status: 200, json: raw }; } });
+    const res = await client.search("keyboard");
+    const p = res.products[0];
+    expect(p.price).toBe("45.50"); // cheapest of the two offers
+    expect(p.website).toBe("keychron.com");
+    expect(p.offers.map((o) => o.merchant)).toEqual(["keychron.com", "redragonshop.com"]);
+    expect(p.offers[0].buyUrl).toContain("buy.trychannel3.com");
+    expect(p.rating).toBe(5.0);
+    expect(p.ratingCount).toBe(6);
+    expect(p.image).toBe("https://img.example/clean.jpg");
+  });
+
   it("falls back to labeled samples on API failure — and says why", async () => {
     const client = new Channel3Catalog("key", { async post() { return { status: 429, json: {} }; } });
     const res = await client.search("sweater");

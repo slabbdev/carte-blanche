@@ -9,8 +9,10 @@ export interface CatalogOffer {
   /** Decimal string, e.g. "74.50". */
   price: string;
   currency: string;
-  /** Merchant / retailer name when the API provides it. */
+  /** Merchant / retailer domain (e.g. "keychron.com") when the API provides it. */
   merchant?: string;
+  /** Affiliate buy link for this offer (buy.trychannel3.com). */
+  buyUrl?: string;
 }
 
 export interface CatalogProduct {
@@ -22,6 +24,9 @@ export interface CatalogProduct {
   currency: string;
   image?: string;
   website?: string;
+  /** Aggregate rating when the API provides it. */
+  rating?: number;
+  ratingCount?: number;
   /** Every known merchant offer, cheapest first — the price-comparison lens (drift story fuel). */
   offers: CatalogOffer[];
 }
@@ -49,9 +54,19 @@ export const catalogHttpTransport: CatalogTransport = {
   },
 };
 
+/** A real search-response offer (verified against api.trychannel3.com, 2026-10-14):
+ *  price is an object, the merchant is a domain, and each offer carries an
+ *  affiliate buy link. */
 interface RawOffer {
-  price?: number | string;
+  url?: string;
+  domain?: string;
+  price?:
+    | { price?: number | string | null; currency?: string | null; compare_at_price?: number | string | null }
+    | number
+    | string
+    | null;
   currency?: string;
+  availability?: string;
   website?: { name?: string } | null;
 }
 
@@ -63,6 +78,7 @@ interface RawProduct {
   price?: number | string | null;
   currency?: string | null;
   website?: { name?: string } | null;
+  ratings?: { value?: number; count?: number } | null;
   images?: Array<{ url?: string; cleaned_url?: string | null; is_main_image?: boolean }> | null;
 }
 
@@ -73,15 +89,28 @@ function formatPrice(raw: number | string | null | undefined): string | undefine
   return n.toFixed(2);
 }
 
+/** Offers carry the price either as an object ({price, currency}) or bare. */
+function offerPrice(o: RawOffer): { price?: string; currency?: string } {
+  if (o.price && typeof o.price === "object") {
+    return { price: formatPrice(o.price.price), currency: o.price.currency ?? undefined };
+  }
+  return { price: formatPrice(o.price), currency: o.currency ?? undefined };
+}
+
 function mapProduct(raw: RawProduct): CatalogProduct | undefined {
   if (!raw?.id || !raw.title) return undefined;
   const offers: CatalogOffer[] = (raw.offers ?? [])
-    .filter((o) => o?.price !== undefined && o?.price !== null)
-    .map((o) => ({
-      price: formatPrice(o.price) as string,
-      currency: o.currency ?? raw.currency ?? "USD",
-      ...(o.website?.name ? { merchant: o.website.name } : {}),
-    }))
+    .map((o) => {
+      const { price, currency } = offerPrice(o);
+      if (!price) return undefined;
+      return {
+        price,
+        currency: currency ?? raw.currency ?? "USD",
+        ...(o.domain ? { merchant: o.domain } : o.website?.name ? { merchant: o.website.name } : {}),
+        ...(o.url ? { buyUrl: o.url } : {}),
+      } as CatalogOffer;
+    })
+    .filter((o): o is CatalogOffer => Boolean(o))
     .sort((a, b) => Number.parseFloat(a.price) - Number.parseFloat(b.price));
   const best = offers[0];
   const images = raw.images ?? [];
@@ -95,6 +124,9 @@ function mapProduct(raw: RawProduct): CatalogProduct | undefined {
     currency: best?.currency ?? raw.currency ?? "USD",
     image: main?.cleaned_url ?? main?.url ?? undefined,
     website: best?.merchant ?? raw.website?.name ?? undefined,
+    ...(raw.ratings?.value !== undefined && raw.ratings.value !== null
+      ? { rating: raw.ratings.value, ratingCount: raw.ratings.count ?? undefined }
+      : {}),
     offers,
   };
 }
