@@ -14,6 +14,8 @@ export interface DisputeView {
   status: string;
   /** dispute_life_cycle_stage — INQUIRY | CHARGEBACK | PRE_ARBITRATION. */
   stage?: string;
+  /** PayPal seeds demo cases into every sandbox merchant account (PP-R-PZT-* ids). */
+  paypalSample?: boolean;
   amount?: string;
   currency?: string;
   openedAt?: string;
@@ -107,6 +109,7 @@ export class DisputeService {
       reason: String(item.reason ?? "unknown"),
       status: String(item.status ?? "unknown"),
       stage: typeof item.dispute_life_cycle_stage === "string" ? item.dispute_life_cycle_stage : undefined,
+      paypalSample: /^PP-R-PZT-/.test(String(item.dispute_id ?? "")),
       openedAt,
       respondBy: openedAt ? plusDays(openedAt, SELLER_WINDOW_DAYS) : undefined,
       source: "paypal",

@@ -160,8 +160,9 @@ export default function Dashboard() {
     { field: "amount", headerName: "Amount", maxWidth: 130, valueFormatter: (p: any) => (p.value ?? "—") + " " + (p.data?.currency ?? "") },
     { headerName: "Linked receipt", minWidth: 150, cellRenderer: (p: any) => p.data?.linkedReceiptId
         ? <a className="mono" href={`/verify/${encodeURIComponent(p.data.linkedReceiptId)}`}>{p.data.linkedReceiptId}</a> : "—"},
-    { field: "source", headerName: "Source", minWidth: 110, cellRenderer: (p: any) =>
-        p.value === "paypal" ? <span className="pill paypal">PAYPAL</span> : <span className="pill mock">MOCK</span> },
+    { field: "source", headerName: "Source", minWidth: 150, cellRenderer: (p: any) =>
+        p.data?.paypalSample ? '<span class="pill warn" title="PayPal seeds demo cases into every sandbox merchant account - this one is not from your sales">PAYPAL SAMPLE</span>'
+        : p.value === "paypal" ? '<span class="pill paypal">PAYPAL</span>' : '<span class="pill mock">MOCK</span>' },
   ], []);
 
   const rec = pack?.pack?.recommendation;
@@ -237,7 +238,17 @@ export default function Dashboard() {
             <span>{current.linkedReceiptId
               ? <a className="mono" href={"/verify/" + encodeURIComponent(current.linkedReceiptId)}>{esc(current.linkedReceiptId)}</a> : "—"}</span>
             <span className="k">Source</span>
-            <span>{current.source === "paypal" ? <span className="pill paypal">PAYPAL</span> : <span className="pill mock">MOCK</span>}</span>
+            <span>
+              {current.paypalSample
+                ? <span className="pill warn" title="PayPal seeds demo cases into every sandbox merchant account">PAYPAL SAMPLE CASE</span>
+                : current.source === "paypal" ? <span className="pill paypal">PAYPAL</span> : <span className="pill mock">MOCK</span>}
+            </span>
+            {current.paypalSample && (
+              <span className="muted" style={{ fontSize: 11.5, gridColumn: "2" }}>
+                This is one of PayPal's own sandbox demo cases (PP-R-PZT-*) — seeded into every merchant
+                account for tooling tests. It is not from your sales and not from your buyer contestations.
+              </span>
+            )}
           </div>
 
           {rec && (
