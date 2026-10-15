@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc && node scripts/copy-web.mjs",
+    "build": "tsc && npm --prefix web run build",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "test": "vitest run",

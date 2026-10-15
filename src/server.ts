@@ -140,16 +140,10 @@ function sessionOf(req: express.Request): { sub: string } | undefined {
   return { sub: session.sub };
 }
 
-const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board", "/planner", "/oversight"]);
 // One PayPal login opens the whole app — PayPal's own model: the same account
-// is the buyer of one dispute and the seller of another. The Resolution
-// Center carries both faces (against my sales / filed by me).
-app.use((req, res, next) => {
-  if (req.method === "GET" && GATED_PAGES.has(req.path) && !sessionOf(req)) {
-    return res.redirect("/login?next=" + encodeURIComponent(req.path));
-  }
-  next();
-});
+// is the buyer of one dispute and the seller of another. Page gating is the
+// SPA's job now (redirect on 401 from /api/auth/me); the API boundary itself
+// stays the sealed-evidence layer, publicly verifiable by design.
 
 // who am I — pages read this to greet the account
 app.get("/api/auth/me", (req, res) => {
@@ -203,10 +197,6 @@ app.get("/api/config", (_req, res) => {
     environment: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
     mode: rails.mode,
   });
-});
-
-app.get("/login", (_req, res) => {
-  res.sendFile(path.join(webRoot, "login.html"));
 });
 
 app.post("/api/auth/login", (req, res) => {
@@ -717,10 +707,6 @@ app.get("/api/verify/:kind/:id", (req, res) => {
   res.status(400).json({ error: "kind must be 'receipts' or 'denials'" });
 });
 
-app.get("/verify/:id", (_req, res) => {
-  res.sendFile(path.join(webRoot, "verify.html"));
-});
-
 // Anchor the current journal position with the TSA, on demand. Additive
 // evidence only — no money path touches this — so the route stays open POST:
 // it lets a scheduled job (Render cron) keep the "provable WHEN" continuous
@@ -844,35 +830,15 @@ app.get("/api/journal/anchor.tsq", (_req, res) => {
 // Merchant dispute cockpit.
 // ---------------------------------------------------------------------------
 
-app.get("/dashboard", (_req, res) => {
-  res.sendFile(path.join(webRoot, "dashboard.html"));
-});
-
 // The TaskBoard kanban is a page of its own: Bryntum trial UMD bundles cannot
 // share one page (a second bundle silently refuses the populated namespace).
-app.get("/board", (_req, res) => {
-  res.sendFile(path.join(webRoot, "board.html"));
-});
-
 // The journey planner hosts the TaskBoard bundle (so /board's constraint holds):
 // Channel3 lines -> signed basket-mandate -> enforcer run, with an AG Grid
 // auto-generated from the lines.
-app.get("/planner", (_req, res) => {
-  res.sendFile(path.join(webRoot, "planner.html"));
-});
-
 // The buyer's oversight tab: spend, memory, walls honored — and the STOP switch.
-app.get("/oversight", (_req, res) => {
-  res.sendFile(path.join(webRoot, "oversight.html"));
-});
-
 // Machine-readable API contract (APIMatic/Redoc/Postman can consume it as-is).
 app.get("/openapi.json", (_req, res) => {
   res.sendFile(path.join(repoRoot, "docs", "openapi.json"));
-});
-
-app.get("/docs", (_req, res) => {
-  res.sendFile(path.join(webRoot, "docs.html"));
 });
 
 app.get("/api/disputes", async (_req, res) => {
@@ -1237,6 +1203,21 @@ function formatForApi(minor: bigint, currency: string): string {
   const s = minor.toString().padStart(exp + 1, "0");
   return `${s.slice(0, -exp)}.${s.slice(-exp)}`;
 }
+
+// Agent-facing artifacts that live outside the Vite build
+app.get("/llms.txt", (_req, res) => {
+  res.sendFile(path.join(repoRoot, "src", "web", "llms.txt"));
+});
+
+// SPA fallback: the React app owns every app route (/, /planner, /oversight,
+// /dashboard, /board, /verify/*, /docs, /login). API, vendor files and anything
+// with an extension keep their normal handling above.
+app.use((req, res, next) => {
+  if (req.method !== "GET") return next();
+  if (req.path.startsWith("/api") || req.path.startsWith("/vendor")) return next();
+  if (path.extname(req.path)) return next();
+  res.sendFile(path.join(webRoot, "index.html"));
+});
 
 app.listen(PORT, () => {
   console.log(`carte-blanche listening on http://localhost:${PORT} (rails: ${rails.mode})`);
