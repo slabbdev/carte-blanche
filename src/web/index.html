@@ -200,10 +200,17 @@
           </div>
           <button id="buy">Attempt purchase</button>
         </div>
+        <div class="row" style="margin-top:14px">
+          <input id="ap-goal" placeholder="Autopilot goal… (e.g. mechanical keyboard)" style="flex:1;min-width:200px;border-radius:19px" />
+          <button class="ghost" id="ap-run">🤖 Autopilot</button>
+          <span id="ap-mode"></span>
+        </div>
         <div class="outcome" id="outcome"></div>
+        <div class="outcome" id="ap-out" style="display:none"></div>
         <p class="muted" style="font-size:12px;margin:10px 0 0">
-          This button is exactly the <code>purchase()</code> tool an LLM agent gets — see <code>npm run demo:llm</code>.
-          Try exceeding the mandate: the refusal is signed too.
+          <b>Attempt purchase</b> is exactly the <code>purchase()</code> tool an LLM agent gets;
+          <b>🤖 Autopilot</b> runs the whole agent server-side under the same mandate (LLM when a key is
+          configured, deterministic policy otherwise) — transcript and artifacts sealed either way.
         </p>
       </section>
 
@@ -536,6 +543,44 @@ $("tr-fetch").onclick = async () => {
     $("tr-out").innerHTML = '<div class="empty">✗ ' + esc(e.message) + "</div>";
   }
 };
+
+$("ap-run").onclick = async () => {
+  const box = $("ap-out");
+  const goal = $("ap-goal").value.trim();
+  const mandateId = $("a-mandate").value;
+  if (!goal || !mandateId) {
+    box.style.display = "block";
+    box.className = "outcome denial";
+    box.innerHTML = "pick a mandate and enter a goal first.";
+    return;
+  }
+  box.style.display = "block";
+  box.className = "outcome pending";
+  box.innerHTML = "🤖 autopilot running server-side under " + esc(mandateId) + "…";
+  try {
+    const t = await api("/api/agent/autopilot");
+    $("ap-mode").innerHTML = t.llm ? '<span class="pill paypal">LLM</span>' : '<span class="pill mock">SCRIPTED POLICY</span>';
+    const r = await api("/api/agent/autopilot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mandate_id: mandateId, goal }),
+    });
+    box.className = r.outcome === "receipt" ? "outcome receipt" : r.outcome === "refused" ? "outcome denial" : "outcome pending";
+    const stepRows = r.steps.map((st) => "<li><b>" + esc(st.action) + "</b> — " + esc(st.detail) + "</li>").join("");
+    const art = r.artifactId ? ' · <a href="/verify/' + encodeURIComponent(r.artifactId) + '">verify →</a>' : "";
+    box.innerHTML =
+      "<b>🤖 " + esc(r.mode) + " autopilot — " + esc(r.outcome) + "</b>" + art +
+      '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px">' + stepRows + "</ul>";
+    await Promise.all([refreshOutcomes(), refreshJournal()]);
+  } catch (e) {
+    box.className = "outcome denial";
+    box.innerHTML = "✗ " + esc(e.message);
+  }
+};
+
+fetch("/api/agent/autopilot").then((r) => r.json()).then((t) => {
+  $("ap-mode").innerHTML = t.llm ? '<span class="pill paypal">LLM READY</span>' : '<span class="pill mock">SCRIPTED POLICY</span>';
+}).catch(() => {});
 
 refreshStatus(); refreshMandates(); refreshOutcomes(); refreshJournal();
 </script>

@@ -116,6 +116,12 @@ Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchas
 `run_journey`… — all funnelled through the same enforcer: the model gets a signed receipt or a
 signed refusal, never rail access. Point `CB_BASE_URL` at any instance.
 
+The console has an **🤖 Autopilot** button: one click runs the agent server-side under the selected
+mandate — the LLM loop when `OPENAI_API_KEY` is set, a deterministic scripted policy otherwise
+(search catalog → cheapest allowlisted offer within remaining budget → purchase). Transcript,
+artifacts and the run itself are journalled (`agent_autopilot_run`). The browser never holds rails
+access or keys.
+
 Compare with PayPal's own official MCP server (`@paypal/mcp`): it gives agents `create_order`,
 `pay_order`, `create_refund` — with nothing but an access token. No mandates, no limits, no
 enforcement, no evidence. **Their server gives agents the keys; ours gives them the walls** — and

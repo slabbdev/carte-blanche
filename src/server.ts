@@ -16,6 +16,7 @@ import { DisputeService } from "./disputes/service.js";
 import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from "./journey/journey.js";
 import { PreferenceStore } from "./agent/preferences.js";
 import { TrackRecordService } from "./agent/trackrecord.js";
+import { configureAutopilot, runAutopilot, autopilotAvailable } from "./agent/autopilot.js";
 import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 import { Channel3Catalog } from "./catalog/channel3.js";
 
@@ -51,6 +52,7 @@ const disputes = new DisputeService({
 // Purchase journeys: planned baskets that derive their own signed mandate and
 // execute line by line through the enforcer (see /planner).
 const paypal = makePayPalClient(process.env); // shared REST client (disputes + webhook verification)
+configureAutopilot(journal, catalog, store, `http://localhost:${PORT}`);
 const journeys = new JourneyPlanner(STATE_DIR, journal);
 // The agent's journalled memory: what it knows about its principal, auditable like everything else.
 const preferences = new PreferenceStore(STATE_DIR, journal);
@@ -326,6 +328,24 @@ app.get("/api/agents/:agent/track-record", (req, res) => {
   const agent = req.params.agent.trim();
   if (!agent) return res.status(400).json({ error: "agent name is required" });
   res.json(trackRecords.statementFor(agent));
+});
+
+// Autopilot: one call runs the agent ON THE SERVER under a mandate — LLM when
+// OPENAI_API_KEY is configured, deterministic scripted policy otherwise. The
+// front UI can drive the agent without the browser ever touching rails or keys.
+app.post("/api/agent/autopilot", async (req, res) => {
+  const body = req.body as { mandate_id?: string; goal?: string };
+  if (!body.mandate_id || !body.goal) return res.status(400).json({ error: "mandate_id and goal are required" });
+  try {
+    const result = await runAutopilot(enforcer, { mandateId: String(body.mandate_id), goal: String(body.goal).slice(0, 160) });
+    res.json(result);
+  } catch (e) {
+    res.status(502).json({ error: `autopilot failed: ${(e as Error).message}` });
+  }
+});
+
+app.get("/api/agent/autopilot", (_req, res) => {
+  res.json({ ...autopilotAvailable(), note: "llm requires OPENAI_API_KEY; otherwise the scripted policy runs" });
 });
 
 // --- PayPal webhooks: PayPal CONFIRMS what our journal claims ----------------
