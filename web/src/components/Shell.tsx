@@ -14,7 +14,7 @@ const LINKS = [
 
 interface Me { sub: string; profile?: { name?: string; givenName?: string; email?: string; payerId?: string; accountType?: string } | null }
 
-export default function Shell() {
+export default function Shell({ requireAuth = true }: { requireAuth?: boolean }) {
   const loc = useLocation();
   const [me, setMe] = useState<Me | null | "anon">(null);
   const [open, setOpen] = useState(false);
@@ -23,10 +23,12 @@ export default function Shell() {
     api<Me>("/api/auth/me").then(setMe).catch(() => setMe("anon"));
   }, [loc.pathname]);
 
-  if (me === "anon") return <Navigate to={"/login?next=" + encodeURIComponent(loc.pathname)} replace />;
+  // public pages (verify/docs) keep the chrome without demanding a session —
+  // "no account needed to verify a receipt" is a product claim, not an oversight
+  if (requireAuth && me === "anon") return <Navigate to={"/login?next=" + encodeURIComponent(loc.pathname)} replace />;
 
-  const profile = me?.profile;
-  const displayName = profile?.givenName || profile?.name || me?.sub || "…";
+  const profile = me && me !== "anon" ? me.profile : undefined;
+  const displayName = me === "anon" ? "…" : profile?.givenName || profile?.name || me?.sub || "…";
   const typeLabel = profile?.accountType ? profile.accountType.toUpperCase() : "";
 
   return (
@@ -39,15 +41,19 @@ export default function Shell() {
           <span className="envchip">SANDBOX</span>
         </span>
         <div className="top-right">
-          <button className="ghost" id="signout" onClick={async () => {
-            try { await api("/api/auth/logout", { method: "POST" }); } catch { /* gone either way */ }
-            window.location.href = "/login";
-          }}>Sign out</button>
-          <span className="avatar" onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer" }}>
-            {displayName.slice(0, 2).toUpperCase()}
-          </span>
+          {me === "anon"
+            ? <Link className="ghost" style={{ display: "inline-flex", alignItems: "center", borderRadius: 19, padding: "8px 16px", fontSize: 13.5, background: "#fff", border: "1px solid #c8cdd6", color: "var(--text)", fontWeight: 600 }} to="/login">Log in</Link>
+            : <>
+              <button className="ghost" id="signout" onClick={async () => {
+                try { await api("/api/auth/logout", { method: "POST" }); } catch { /* gone either way */ }
+                window.location.href = "/login";
+              }}>Sign out</button>
+              <span className="avatar" onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer" }}>
+                {displayName.slice(0, 2).toUpperCase()}
+              </span>
+            </>}
         </div>
-        {open && me && (
+        {open && me && me !== "anon" && (
           <div className="acct-pop" onMouseLeave={() => setOpen(false)}>
             <div className="acct-line big">{esc(profile?.name || me.sub)}</div>
             {profile?.email && <div className="acct-line">{esc(profile.email)}</div>}

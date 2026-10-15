@@ -13,9 +13,11 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/verify" element={<Verify />} />
-      <Route path="/verify/:id" element={<Verify />} />
-      <Route path="/docs" element={<Docs />} />
+      <Route element={<Shell requireAuth={false} />}>
+        <Route path="/verify" element={<Verify />} />
+        <Route path="/verify/:id" element={<Verify />} />
+        <Route path="/docs" element={<Docs />} />
+      </Route>
       <Route element={<Shell />}>
         <Route path="/" element={<Console />} />
         <Route path="/planner" element={<Planner />} />
