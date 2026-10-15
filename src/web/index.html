@@ -73,6 +73,9 @@
   button.danger { background: #fff; border: 1px solid #eec4bc; color: var(--red); font-weight: 600; padding: 4px 12px; font-size: 12px; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  #paypal-zone { display: none; margin-top: 14px; padding: 14px; border: 1px dashed var(--border); border-radius: 10px; }
+  #paypal-zone.show { display: block; }
+  #paypal-buttons { min-height: 48px; }
   .muted { color: var(--muted); }
 
   .pill { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.2px; }
@@ -206,6 +209,11 @@
           <span id="ap-mode"></span>
         </div>
         <div class="outcome" id="outcome"></div>
+        <div id="paypal-zone">
+          <div class="muted" style="font-size:12px;margin-bottom:8px">Real PayPal Buttons for the wallet flow — the buyer approves IN PayPal; the capture comes back through the enforcer.</div>
+          <div id="paypal-buttons"></div>
+          <div class="empty" id="paypal-note" style="display:none"></div>
+        </div>
         <div class="outcome" id="ap-out" style="display:none"></div>
         <p class="muted" style="font-size:12px;margin:10px 0 0">
           <b>Attempt purchase</b> is exactly the <code>purchase()</code> tool an LLM agent gets;
@@ -581,6 +589,115 @@ $("ap-run").onclick = async () => {
 fetch("/api/agent/autopilot").then((r) => r.json()).then((t) => {
   $("ap-mode").innerHTML = t.llm ? '<span class="pill paypal">LLM READY</span>' : '<span class="pill mock">SCRIPTED POLICY</span>';
 }).catch(() => {});
+
+// --- real PayPal Buttons for the wallet flow (official @paypal/paypal-js) ----
+let ppActions = null;
+let ppLogicalKey = null;
+
+async function mountPaypalButtons() {
+  const cfg = await api("/api/config").catch(() => null);
+  const zone = $("paypal-zone");
+  if (!cfg?.clientId || cfg.mode === "mock") {
+    zone.classList.remove("show");
+    return;
+  }
+  zone.classList.add("show");
+  const funding = $("a-funding").value;
+  if (funding !== "wallet") { zone.classList.remove("show"); return; }
+  zone.classList.add("show");
+  if (ppActions) return; // already mounted
+  try {
+    // canonical plain-HTML integration: load the SDK directly from PayPal
+    if (!window.paypal) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(cfg.clientId)}&currency=USD&intent=capture&components=buttons`;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error("PayPal SDK failed to load"));
+        document.head.appendChild(s);
+      });
+    }
+    const paypal = window.paypal;
+    paypal.Buttons({
+      style: { layout: "horizontal", label: "paypal" },
+      onClick: async (_data, actions) => {
+        if (!$("a-mandate").value) {
+          $("outcome").style.display = "block";
+          $("outcome").className = "outcome denial";
+          $("outcome").innerHTML = "pick a mandate first.";
+          return actions.reject();
+        }
+        return actions.resolve();
+      },
+      createOrder: async () => {
+        // the order is created BY the enforcer (mandate-checked, journalled),
+        // wallet-funded: it stops at PAYER_ACTION_REQUIRED and PayPal's popup
+        // takes the buyer through the real approval.
+        const res = await fetch("/api/agent/purchase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mandate_id: $("a-mandate").value,
+            amount: $("a-amount").value,
+            currency: "USD",
+            description: $("a-desc").value || "wallet purchase",
+            payee: $("a-payee").value || undefined,
+            funding: "wallet",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.outcome === "pending") {
+          ppLogicalKey = data.logicalKey;
+          return data.orderId;
+        }
+        if (data.denial) {
+          $("outcome").style.display = "block";
+          $("outcome").className = "outcome denial";
+          $("outcome").innerHTML = '<b style="color:var(--red)">REFUSED</b> <span class="mono">' + esc(data.denial.denialId) + "</span> — [" + esc(data.denial.reasonCode) + "] " + esc(data.denial.reasonDetail) + ' · <a href="/verify/' + esc(data.denial.denialId) + '">verify →</a>';
+          await Promise.all([refreshOutcomes(), refreshJournal()]);
+        }
+        throw new Error(data.error || "order could not be created under this mandate");
+      },
+      onApprove: async () => {
+        const box = $("outcome");
+        box.style.display = "block";
+        box.className = "outcome pending";
+        box.innerHTML = "buyer approved — capturing through the enforcer…";
+        const r = await api("/api/agent/purchase/resume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ logical_key: ppLogicalKey }),
+        });
+        if (r.outcome === "receipt") {
+          box.className = "outcome receipt";
+          box.innerHTML = '<b style="color:var(--green)">RECEIPT</b> <span class="mono">' + esc(r.receipt.receiptId) + "</span> — " + esc(r.receipt.amount) + " " + esc(r.receipt.currency) + ' · <a href="/verify/' + esc(r.receipt.receiptId) + '">verify →</a>';
+        } else {
+          box.className = "outcome pending";
+          box.innerHTML = "capture not complete yet — retry from the button.";
+        }
+        await Promise.all([refreshOutcomes(), refreshJournal()]);
+      },
+      onCancel: () => {
+        const box = $("outcome");
+        box.style.display = "block";
+        box.className = "outcome pending";
+        box.innerHTML = "buyer closed the PayPal window — the order stays journalled as pending.";
+      },
+      onError: (err) => {
+        const box = $("outcome");
+        box.style.display = "block";
+        box.className = "outcome denial";
+        box.innerHTML = "PayPal error: " + esc(String(err));
+      },
+    }).render("#paypal-buttons");
+  } catch (e) {
+    $("paypal-note").style.display = "block";
+    $("paypal-note").textContent = "PayPal Buttons unavailable: " + e.message;
+  }
+}
+
+$("a-funding").addEventListener("change", mountPaypalButtons);
+mountPaypalButtons().catch(() => {});
 
 refreshStatus(); refreshMandates(); refreshOutcomes(); refreshJournal();
 </script>

@@ -104,9 +104,22 @@ app.use("/vendor", express.static(path.join(repoRoot, "node_modules", "ag-grid-c
 app.use("/vendor/charts", express.static(path.join(repoRoot, "node_modules", "ag-charts-community", "dist", "umd")));
 app.use("/vendor/bryntum", express.static(path.join(repoRoot, "node_modules", "@bryntum", "calendar-trial")));
 app.use("/vendor/taskboard", express.static(path.join(repoRoot, "node_modules", "@bryntum", "taskboard-trial")));
+app.use("/vendor/paypal-js", express.static(path.join(repoRoot, "node_modules", "@paypal", "paypal-js", "dist", "iife")));
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, rails: rails.mode, journalLength: journal.length, catalog: catalog.enabled ? "channel3" : "sample", uptimeSec: Math.round(process.uptime()) });
+});
+
+// Client config for the browser-side PayPal SDK. The client id is public by
+// design (it identifies the app, it does not authenticate anything); the
+// secrets stay server-side. The Buttons rendered with it create orders THROUGH
+// the enforcer — the browser never holds rail access.
+app.get("/api/config", (_req, res) => {
+  res.json({
+    clientId: process.env.PAYPAL_CLIENT_ID ?? null,
+    environment: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
+    mode: rails.mode,
+  });
 });
 
 app.get("/login", (_req, res) => {
