@@ -5,6 +5,16 @@ import { verifyMerkleInclusion, merkleLeafHash, type MerkleInclusionProof } from
 import { parseTimestampResponse, verifyTimestampToken } from "../journal/tsa.js";
 import type { Mandate } from "../mandate/mandate.js";
 
+/** The buyer's words that ACTIVATED a purchase, sealed at purchase time.
+ *  text is truncated to 400 chars; hash = sha256 of the FULL raw utterance —
+ *  the buyer can always re-hash their own log and match it. */
+export interface SealedActivation {
+  text: string;
+  hash: string;
+  channel?: string;
+  sessionRef?: string;
+}
+
 /** A completed, journalled, signed purchase. */
 export interface Receipt {
   receiptId: string;
@@ -15,6 +25,7 @@ export interface Receipt {
   currency: string;
   description: string;
   payee?: string;
+  intent?: SealedActivation;
   orderId: string;
   captureId: string;
   status: string;

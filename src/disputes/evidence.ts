@@ -50,6 +50,8 @@ export interface EvidencePack {
   recommendation: DefenseRecommendation;
   fulfillment?: { carrier: string; trackingNumber: string; shippedAt: string; seq: number };
   refund?: { refundId: string; captureId: string; seq: number };
+  /** The buyer's activation words, sealed when the purchase fired. */
+  activation?: { text: string; hash: string; channel?: string; sessionRef?: string; seq: number };
   pending: string[];
 }
 
@@ -193,6 +195,25 @@ export function buildEvidencePack(
     pending.push("fulfillment evidence not yet attached — POST /api/orders/:orderId/fulfillment (carrier + tracking) fills the PROOF_OF_FULFILLMENT slot");
   }
 
+  // the sealed activation: the purchase_requested event carries the buyer's
+  // words that fired THIS purchase (matched by logical key)
+  let activation: EvidencePack["activation"];
+  if (receipt) {
+    const fired = [...journal.eventsOfType("purchase_requested", (d) => d.logical_key === receipt.logicalKey)]
+      .reverse()
+      .find((e) => Boolean((e.data as any).activation));
+    if (fired) {
+      const d = fired.data as Record<string, any>;
+      activation = {
+        text: String(d.activation?.text ?? ""),
+        hash: String(d.activation?.text_hash ?? ""),
+        ...(d.activation?.channel ? { channel: String(d.activation.channel) } : {}),
+        ...(d.activation?.session_ref ? { sessionRef: String(d.activation.session_ref) } : {}),
+        seq: fired.seq,
+      };
+    }
+  }
+
   const pack: EvidencePack = {
     packId: packFileId(dispute.disputeId),
     generatedAt: new Date().toISOString(),
@@ -215,6 +236,7 @@ export function buildEvidencePack(
     recommendation,
     ...(fulfillment ? { fulfillment } : {}),
     ...(refund ? { refund } : {}),
+    ...(activation ? { activation } : {}),
     pending,
   };
 
@@ -277,8 +299,17 @@ export function toMarkdown(pack: EvidencePack): string {
     lines.push("");
   }
 
+  if (pack.activation) {
+    lines.push("## 5. The buyer's activation — sealed words");
+    lines.push(`- The assistant that heard the buyer sealed this utterance at purchase time (journal seq ${pack.activation.seq}, tamper-evident chain):`);
+    lines.push('> "' + pack.activation.text + '"');
+    lines.push(`- sha256(full utterance): \`${pack.activation.hash}\`${pack.activation.channel ? " · channel: " + pack.activation.channel : ""}${pack.activation.sessionRef ? " · session: " + pack.activation.sessionRef : ""}`);
+    lines.push("- Combined with the signed mandate above, the claim \"I never told my agent to buy this\" requires the buyer to disown BOTH their signature AND their own words.");
+    lines.push("");
+  }
+
   const rec = pack.recommendation;
-  lines.push(`## 5. Defense recommendation: **${rec.action}**`);
+  lines.push(`## ${rec ? 6 : 5}. Defense recommendation: **${rec?.action}**`);
   lines.push(`- ${rec.because}`);
   lines.push(`- Evidence coverage vs PayPal's matrix for reason \`${pack.coverage.reason}\`: **${pack.coverage.covered}/${pack.coverage.total} required slots covered**`);
   for (const s of pack.coverage.slots) {

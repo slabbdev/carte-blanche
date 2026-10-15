@@ -49,6 +49,13 @@ export interface PurchaseRequest {
    * most one PayPal side effect. Defaults to a hash of the request fields.
    */
   logicalKey?: string;
+  /**
+   * The buyer's activation words, passed by the assistant that heard them
+   * (ChatGPT/Claude/… via the MCP server). Sealed into the journal at purchase
+   * time and stamped on the receipt: the seller's answer to "I never told my
+   * agent to buy that" is the buyer's own sealed words + their signed mandate.
+   */
+  intent?: { text: string; channel?: string; sessionRef?: string };
 }
 
 export type Outcome =
@@ -250,6 +257,16 @@ export class Enforcer {
       payee: req.payee,
       description: req.description,
       ...(rec && win ? { recurrence_window: { index: win.index, start: new Date(win.startMs).toISOString(), end: new Date(win.endMs).toISOString() } } : {}),
+      // the buyer's activation words, sealed AT purchase time: the seller's
+      // answer to "I never told my agent to buy that"
+      ...(req.intent ? {
+        activation: {
+          text: req.intent.text.slice(0, 400),
+          text_hash: sha256Hex(req.intent.text.trim()),
+          ...(req.intent.channel ? { channel: req.intent.channel } : {}),
+          ...(req.intent.sessionRef ? { session_ref: req.intent.sessionRef } : {}),
+        },
+      } : {}),
     }, at);
 
     const createRequestId = `cb-${logicalKey}-cr`;
@@ -323,6 +340,14 @@ export class Enforcer {
       currency: req.currency,
       description: req.description,
       payee: req.payee,
+      ...(req.intent ? {
+        intent: {
+          text: req.intent.text.slice(0, 400),
+          hash: sha256Hex(req.intent.text.trim()),
+          ...(req.intent.channel ? { channel: req.intent.channel } : {}),
+          ...(req.intent.sessionRef ? { sessionRef: req.intent.sessionRef } : {}),
+        },
+      } : {}),
       orderId: capture.orderId,
       captureId: capture.captureId,
       status: capture.status,

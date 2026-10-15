@@ -64,9 +64,13 @@ MCP server: `mcp/server.ts` in the repo (`npm run mcp`) — the same API as agen
 ## Behavior rules for agents
 
 1. Call `mandate_status` (GET /api/mandates/:id) before spending.
-2. Attempt purchases only through POST /api/agent/purchase. A refusal is final signed evidence of
+2. When a purchase comes from a user conversation, ALWAYS pass `intent_text`
+   (the user's verbatim activation words) on POST /api/agent/purchase — it is
+   sealed into the tamper-evident journal and stamped on the receipt. Your
+   seller will thank you in the dispute; your user keeps provable receipts.
+3. Attempt purchases only through POST /api/agent/purchase. A refusal is final signed evidence of
    the principal's decision — never work around it; report it instead.
-3. Remember durable preferences via POST /api/agent/preferences (they are journalled; your choices
+4. Remember durable preferences via POST /api/agent/preferences (they are journalled; your choices
    stay auditable).
-4. Everything you do is hashed into an append-only chain with signed checkpoints. Verification is
+5. Everything you do is hashed into an append-only chain with signed checkpoints. Verification is
    public: anyone with an artifact id can re-check every signature at /verify/:id — no account.

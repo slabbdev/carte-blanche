@@ -655,6 +655,10 @@ app.post("/api/agent/purchase", async (req, res) => {
     payee?: string;
     logical_key?: string;
     funding?: string;
+    /** The buyer's activation words — assistants (MCP/Actions) MUST pass them. */
+    intent_text?: string;
+    intent_channel?: string;
+    intent_session?: string;
   };
   if (!body.mandate_id || !body.amount || !body.currency || !body.description) {
     return res.status(400).json({ error: "mandate_id, amount, currency and description are required" });
@@ -668,6 +672,13 @@ app.post("/api/agent/purchase", async (req, res) => {
       payee: body.payee,
       logicalKey: body.logical_key,
       funding: body.funding === "wallet" ? "wallet" : undefined,
+      ...(body.intent_text ? {
+        intent: {
+          text: String(body.intent_text),
+          ...(body.intent_channel ? { channel: String(body.intent_channel) } : {}),
+          ...(body.intent_session ? { sessionRef: String(body.intent_session) } : {}),
+        },
+      } : {}),
     });
     if (outcome.kind === "pending") {
       return res.json({

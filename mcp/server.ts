@@ -91,12 +91,15 @@ server.tool(
 
 server.tool(
   "purchase",
-  "Attempt a purchase under a mandate. Returns a signed receipt if allowed, or a signed proof of refusal naming the blocking limit (OVER_PER_TRANSACTION, OVER_TOTAL_CAP, PAYEE_NOT_ALLOWED, MANDATE_REVOKED...). A refusal is final signed evidence of the principal's decision — report it, never try to work around it.",
+  "Attempt a purchase under a mandate. ALWAYS pass intent_text = the user's exact words that asked for this purchase ('buy me the PS5 Slim') — they are sealed into the tamper-evident journal and stamped on the receipt as the buyer's activation, the seller's defense against 'I never told my agent to buy that'. Returns a signed receipt if allowed, or a signed proof of refusal naming the blocking limit (OVER_PER_TRANSACTION, OVER_TOTAL_CAP, PAYEE_NOT_ALLOWED, MANDATE_REVOKED...). A refusal is final signed evidence of the principal's decision — report it, never try to work around it.",
   {
     mandate_id: z.string(),
     amount: z.string().describe("Decimal amount, e.g. '59.99'"),
     currency: z.string().describe("ISO 4217, e.g. USD"),
     description: z.string().describe("What this purchase is for (appears on the receipt)"),
+    intent_text: z.string().optional().describe("The user's verbatim activation words. Sealed at purchase time — your seller will thank you in the dispute"),
+    intent_channel: z.string().optional().describe("e.g. 'chatgpt', 'claude', 'perplexity', 'cursor'"),
+    intent_session: z.string().optional().describe("Your conversation/session id, for cross-reference"),
     payee: z.string().optional().describe("Payee email or merchant domain; must be on the mandate allowlist when one is set"),
   },
   async (a) => ({
