@@ -124,13 +124,27 @@ export default function Planner() {
       setHint("");
     } catch (e: any) { setHint("✗ " + e.message); }
   }
+  const searchSeq = useRef(0);
   async function searchCatalog() {
+    const q = catQ.trim();
+    if (q.length < 2) { setProducts([]); setCatSource('<span class="pill mock">type at least 2 characters</span>'); return; }
+    const seq = ++searchSeq.current;
+    setCatSource('<span class="pill mock">searching…</span>');
     try {
-      const data = await api<{ source: string; products: Product[] }>("/api/catalog?q=" + encodeURIComponent(catQ));
+      const data = await api<{ source: string; products: Product[] }>("/api/catalog?q=" + encodeURIComponent(q));
+      if (seq !== searchSeq.current) return; // a newer query already answered
       setProducts(data.products ?? []);
       setCatSource(data.source === "channel3" ? '<span class="pill paypal">CHANNEL3 LIVE</span>' : '<span class="pill mock">SAMPLE DATA</span>');
-    } catch (e: any) { setHint("✗ " + e.message); }
+    } catch (e: any) {
+      if (seq === searchSeq.current) setCatSource('<span class="pill no">search failed</span>');
+    }
   }
+  // live search: typing drives the query (debounced — the API is a sponsor, not a pinata)
+  useEffect(() => {
+    const t = setTimeout(() => { if (catQ.trim().length >= 2) searchCatalog(); }, 550);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catQ]);
   async function addLine(p: Product) {
     try {
       if (!journey) {

@@ -125,14 +125,28 @@ export default function Console() {
     await refreshMandates();
   }
 
+  const searchSeq = useRef(0);
   async function search() {
+    const q = query.trim();
+    if (q.length < 2) { setProducts([]); setCatSource('<span class="pill mock">type at least 2 characters</span>'); return; }
+    const seq = ++searchSeq.current;
+    setCatSource('<span class="pill mock">searching…</span>');
     try {
-      const data = await api<{ source: string; products: Product[] }>("/api/catalog?q=" + encodeURIComponent(query.trim()));
+      const data = await api<{ source: string; products: Product[] }>("/api/catalog?q=" + encodeURIComponent(q));
+      if (seq !== searchSeq.current) return;
       setCatSource(data.source === "channel3" ? '<span class="pill paypal">CHANNEL3 LIVE</span>' : '<span class="pill mock">SAMPLE DATA</span>');
       setProducts(data.products);
       setOpenOffers(null);
-    } catch (e: any) { setProducts([]); alert(e.message); }
+    } catch (e: any) {
+      if (seq === searchSeq.current) { setProducts([]); setCatSource('<span class="pill no">search failed</span>'); }
+    }
   }
+  // live search: typing drives the query (debounced)
+  useEffect(() => {
+    const t = setTimeout(() => { if (query.trim().length >= 2) search(); }, 550);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   function selectOffer(p: Product, oi: number) {
     const o = p.offers[oi];
