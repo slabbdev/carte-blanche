@@ -1106,36 +1106,45 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     journal.append("paypal_login_failed", { reason, detail: detail.slice(0, 200) });
     return res.redirect("/login?error=" + encodeURIComponent(`paypal: ${reason}`));
   };
-  const nextPath = q.state ? oidcStates.get(q.state) : undefined;
-  if (q.error) return fail("denied", q.error_description ?? q.error);
-  if (!q.code || !q.state || !oidcStates.delete(q.state)) return fail("state", "missing/unknown state (anti-CSRF miss)");
-  if (!paypal) return fail("unconfigured", "no paypal client");
-  const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
-  const tok = await paypal.oidcTokenExchange({ code: q.code, redirectUri: `${base}/api/auth/paypal/callback` });
-  const accessToken = tok.data?.access_token;
-  if (!tok.ok || !accessToken) {
-    return fail("exchange", `tokenservice ${tok.status}: usually the redirect URI is not registered on the app, or the Connect feature is not enabled (developer dashboard)`);
+  // An OAuth callback must NEVER take the process down (Express 4 does not
+  // catch async handler rejections — an uncaught throw here 502s on Render).
+  // Any surprise becomes a redirect with the honest reason.
+  try {
+    const nextPath = q.state ? oidcStates.get(q.state) : undefined;
+    if (q.error) return fail("denied", q.error_description ?? q.error);
+    if (!q.code || !q.state || !oidcStates.delete(q.state)) {
+      return fail("state", "unknown or expired state — the instance likely restarted between login and callback; retry the button");
+    }
+    if (!paypal) return fail("unconfigured", "no paypal client");
+    const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
+    const tok = await paypal.oidcTokenExchange({ code: q.code, redirectUri: `${base}/api/auth/paypal/callback` });
+    const accessToken = tok.data?.access_token;
+    if (!tok.ok || !accessToken) {
+      return fail("exchange", `tokenservice ${tok.status}: usually the redirect URI is not registered on the app, or the Connect feature is not enabled (developer dashboard) — raw: ${JSON.stringify(tok.data ?? {}).slice(0, 120)}`);
+    }
+    const ui = await paypal.oidcUserinfo(accessToken);
+    if (!ui.ok) return fail("userinfo", `userinfo ${ui.status}: ${JSON.stringify(ui.data ?? {}).slice(0, 120)}`);
+    const payerId = String(ui.data.payer_id ?? ui.data.user_id ?? "");
+    const email = typeof ui.data.email === "string" ? ui.data.email : "";
+    if (!payerId && !email) return fail("userinfo", "empty profile");
+    const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
+    const token = randomBytes(32).toString("hex");
+    sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+    res.setHeader(
+      "Set-Cookie",
+      `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+    );
+    // Minimization: the journal proves WHO logged in without archiving the email.
+    journal.append("paypal_login", {
+      sub,
+      email_domain: email.includes("@") ? email.split("@")[1] : undefined,
+      name_given: typeof ui.data.given_name === "string" ? (ui.data.given_name as string).slice(0, 40) : undefined,
+      oidc: true,
+    });
+    return res.redirect(nextPath ?? "/");
+  } catch (e) {
+    return fail("internal", (e as Error).message);
   }
-  const ui = await paypal.oidcUserinfo(accessToken);
-  if (!ui.ok) return fail("userinfo", `userinfo ${ui.status}`);
-  const payerId = String(ui.data.payer_id ?? ui.data.user_id ?? "");
-  const email = typeof ui.data.email === "string" ? ui.data.email : "";
-  if (!payerId && !email) return fail("userinfo", "empty profile");
-  const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
-  const token = randomBytes(32).toString("hex");
-  sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
-  res.setHeader(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
-  );
-  // Minimization: the journal proves WHO logged in without archiving the email.
-  journal.append("paypal_login", {
-    sub,
-    email_domain: email.includes("@") ? email.split("@")[1] : undefined,
-    name_given: typeof ui.data.given_name === "string" ? (ui.data.given_name as string).slice(0, 40) : undefined,
-    oidc: true,
-  });
-  res.redirect(nextPath ?? "/");
 });
 
 function formatForApi(minor: bigint, currency: string): string {

@@ -93,7 +93,14 @@ export class PayPalClient {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const raw = res.status === 204 ? "" : await res.text();
-    const data = (raw.trim() ? (JSON.parse(raw) as T) : (undefined as T));
+    // PayPal normally answers JSON — but error pages (HTML) happen at the edge;
+    // a parser throw must never take the process down: surface the raw text.
+    let data: T;
+    try {
+      data = (raw.trim() ? (JSON.parse(raw) as T) : (undefined as T));
+    } catch {
+      data = { raw: raw.slice(0, 500) } as unknown as T;
+    }
     return { status: res.status, ok: res.ok, data };
   }
 
@@ -212,7 +219,12 @@ export class PayPalClient {
       body: body.toString(),
     });
     const raw = await res.text();
-    const data = (raw.trim() ? (JSON.parse(raw) as { access_token?: string }) : {}) as { access_token?: string };
+    let data: { access_token?: string } = {};
+    try {
+      data = raw.trim() ? (JSON.parse(raw) as { access_token?: string }) : {};
+    } catch {
+      data = {}; // non-JSON (edge error page) — the caller sees ok:false
+    }
     return { status: res.status, ok: res.ok, data };
   }
 
@@ -221,7 +233,12 @@ export class PayPalClient {
       headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": "carte-blanche/0.2.0" },
     });
     const raw = await res.text();
-    const data = (raw.trim() ? (JSON.parse(raw) as Record<string, unknown>) : {}) as Record<string, unknown>;
+    let data: Record<string, unknown> = {};
+    try {
+      data = raw.trim() ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    } catch {
+      data = {};
+    }
     return { status: res.status, ok: res.ok, data };
   }
 
