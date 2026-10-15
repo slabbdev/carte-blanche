@@ -29,6 +29,10 @@ export default function Login() {
           Log in with PayPal
         </a>
         <div className="errorline">{error ? "PayPal login: " + error : ""}</div>
+        <div className="seat-hint">
+          <b>BUSINESS</b> account → the seller's seat (Resolution Center, the merchant balance).{" "}
+          <b>PERSONAL</b> account → the buyer's seat (agents, contestations, wallet money).
+        </div>
         <p className="fineprint">
           Sandbox credentials come from your{" "}
           <a href="https://developer.paypal.com/dashboard/accounts" target="_blank" rel="noopener">PayPal developer account</a>.
