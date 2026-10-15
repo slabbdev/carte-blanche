@@ -70,6 +70,7 @@ export default function Board() {
       taskRenderer: ({ taskRecord, cardConfig }: any) => {
         // v7: mutate cardConfig — a returned string is ignored
         cardConfig.html = `
+        <div class="tb-card">
         <div class="tb-title">${esc(taskRecord.name)}</div>
         <div class="tb-id">${esc(taskRecord.id)}</div>
         <div class="tb-meta">
@@ -81,6 +82,7 @@ export default function Board() {
           ${taskRecord.receiptId ? '<a href="/verify/' + encodeURIComponent(taskRecord.receiptId) + '" target="_blank" rel="noopener">verify receipt →</a>' : ""}
           <a href="/api/disputes/${encodeURIComponent(taskRecord.id)}/evidence-pack" target="_blank" rel="noopener">evidence ↓</a>
           <a href="/dashboard">cockpit →</a>
+        </div>
         </div>`;
       },
     });

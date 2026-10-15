@@ -68,7 +68,8 @@ export default function Verify() {
                 {report.checks.map((c: any, i: number) => (
                   <div className="buy-row" key={i}>
                     <span className={"pill " + (c.ok ? "ok" : "no")}>{c.ok ? "✓" : "✗"}</span>
-                    <b>{esc(c.name)}</b>
+                    <b>{esc(c.label)}</b>
+                    <span className="mono">{esc(c.id ?? "")}</span>
                     <span className="muted" style={{ flex: 1 }}>{esc(c.detail ?? "")}</span>
                   </div>
                 ))}

@@ -14,7 +14,7 @@ const gridTheme = themeQuartz.withParams({
 
 interface Item { id: string; title: string; merchant?: string; productId?: string; price: string; currency: string; quantity: number; status: "planned" | "receipt" | "refused"; outcomeId?: string; detail?: string }
 interface Journey { id: string; name: string; currency: string; items: Item[]; mandateId?: string; recurrence?: { frequency: string }; cyclesRun?: string[]; total?: string }
-interface Product { id?: string; title: string; price?: string; currency: string; image?: string; website?: string; offers: Array<{ price: string; currency: string; merchant?: string }> }
+interface Product { id?: string; title: string; price?: string; currency: string; image?: string; website?: string; rating?: number; offers: Array<{ price: string; currency: string; merchant?: string }> }
 
 export default function Planner() {
   const [name, setName] = useState("team setup, this week");
@@ -25,6 +25,8 @@ export default function Planner() {
   const [products, setProducts] = useState<Product[]>([]);
   const [catSource, setCatSource] = useState("");
   const [watch, setWatch] = useState<any[]>([]);
+  const [watchBusy, setWatchBusy] = useState<string | null>(null);
+  const [watched, setWatched] = useState<string[]>([]);
   const cycleRef = useRef<HTMLInputElement>(null);
 
   // TaskBoard (Bryntum UMD via /vendor)
@@ -99,11 +101,13 @@ export default function Planner() {
           : t.status === "refused" ? '<span class="pill no">REFUSED</span>' : '<span class="pill mock">PLANNED</span>';
         // v7: the renderer MUTATES cardConfig — a returned string is ignored
         cardConfig.html = `
+        <div class="tb-card">
         <div class="tb-title">${esc(t.name)}</div>
         <div class="tb-line"><span class="price">${esc(t.total)}</span><span class="muted">(${esc(t.price)} × ${esc(String(t.quantity))})</span></div>
         <div class="tb-merchant">${esc(t.merchant || "—")}${t.productId ? ' · <span class="mono">' + esc(t.productId) + "</span>" : ""}</div>
         <div class="tb-meta">${pill}${t.outcomeId ? '<a class="mono" href="/verify/' + encodeURIComponent(t.outcomeId) + '" target="_blank" rel="noopener">' + esc(t.outcomeId) + " →</a>" : '<span class="muted">not attempted</span>'}</div>
-        ${t.detail ? '<div class="tb-detail">' + esc(t.detail) + "</div>" : ""}`;
+        ${t.detail ? '<div class="tb-detail">' + esc(t.detail) + "</div>" : ""}
+        </div>`;
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,11 +146,22 @@ export default function Planner() {
     } catch (e: any) { setHint("✗ " + e.message); }
   }
   async function watchPrice(p: Product) {
+    if (!p.id || watchBusy) return;
+    setWatchBusy(p.id);
+    setHint(`👁 adding price watch on ${(p.title || "").slice(0, 50)}…`);
     try {
-      await api("/api/catalog/track", { method: "POST", body: JSON.stringify({ product_id: p.id, title: p.title }) });
-      setHint(`👁 price watch on: ${(p.title || "").slice(0, 60)} — drops land in the panel below (webhook endpoint must be registered in the Channel3 dashboard).`);
-      loadWatch().catch(() => {});
+      const r = await api<{ ok: boolean; channel3_status: number; detail?: string }>("/api/catalog/track", {
+        method: "POST", body: JSON.stringify({ product_id: p.id, title: p.title }),
+      });
+      if (r.ok) {
+        setWatched((w) => [...w, p.id!]);
+        setHint(`👁 price watch LIVE on ${(p.title || "").slice(0, 50)} (channel3 ${r.channel3_status}) — drops land in the panel below. The webhook URL must be registered in the Channel3 dashboard for real drops.`);
+        loadWatch().catch(() => {});
+      } else {
+        setHint(`✗ price watch refused (channel3 ${r.channel3_status}): ${r.detail ?? "unknown"}`);
+      }
     } catch (e: any) { setHint("✗ " + e.message); }
+    finally { setWatchBusy(null); }
   }
   async function approve() {
     if (!journey) return;
@@ -228,7 +243,14 @@ export default function Planner() {
                   <span className="from">{p.price ?? "—"}</span>
                   {p.offers.length > 1 && <span className="meta">{p.offers.length} merchants</span>}
                   <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                    {p.id && <button type="button" className="ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => watchPrice(p)} title="Channel3 price tracking">👁</button>}
+                    {p.id && (
+                      <button type="button" className="ghost" style={{ padding: "5px 10px", fontSize: 12 }}
+                        disabled={watchBusy === p.id || watched.includes(p.id)}
+                        onClick={() => watchPrice(p)}
+                        title="Channel3 price tracking — a webhook lands here the moment the price moves">
+                        {watched.includes(p.id) ? "👁 watched" : watchBusy === p.id ? "…" : "👁 watch"}
+                      </button>
+                    )}
                     <button type="button" className="ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => addLine(p)}>+ add</button>
                   </span>
                 </div>
