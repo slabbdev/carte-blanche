@@ -43,6 +43,7 @@ export interface CatalogResult {
 
 export interface CatalogTransport {
   post(url: string, body: unknown, apiKey: string, timeoutMs: number): Promise<{ status: number; json: unknown }>;
+  get?(url: string, apiKey: string, timeoutMs: number): Promise<{ status: number; json: unknown }>;
 }
 
 export const catalogHttpTransport: CatalogTransport = {
@@ -51,6 +52,14 @@ export const catalogHttpTransport: CatalogTransport = {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const json = (await res.json().catch(() => ({}))) as unknown;
+    return { status: res.status, json };
+  },
+  async get(url, apiKey, timeoutMs) {
+    const res = await fetch(url, {
+      headers: { "x-api-key": apiKey },
       signal: AbortSignal.timeout(timeoutMs),
     });
     const json = (await res.json().catch(() => ({}))) as unknown;
@@ -187,6 +196,98 @@ export class Channel3Catalog {
       return { source: "sample", products: sampleProducts(query, pageToken), error: (err as Error).message };
     }
   }
+
+  // --- Price tracking (v0) — "time-to-buy" for standing baskets ---------------
+  // Verified shapes from docs.trychannel3.com (2026-10-15). Webhooks are
+  // configured in THEIR dashboard (account-side) and arrive as
+  // {type: "price.changed", data: {canonical_product_id, new_price, currency}};
+  // their docs document no signature scheme, so receivers journal honestly.
+
+  /** Subscribe to price-change webhooks for a canonical product. */
+  async startPriceTracking(canonicalProductId: string): Promise<{ ok: boolean; status: number; detail?: string }> {
+    if (!this.enabled) return { ok: false, status: 0, detail: "channel3 disabled (no api key)" };
+    try {
+      const { status, json } = await this.transport.post(
+        `${this.baseUrl}/v0/price-tracking/start`,
+        { canonical_product_id: canonicalProductId },
+        this.apiKey as string,
+        this.timeoutMs,
+      );
+      return { ok: status === 200 || status === 201, status, ...(status >= 400 ? { detail: JSON.stringify(json).slice(0, 200) } : {}) };
+    } catch (err) {
+      return { ok: false, status: 0, detail: (err as Error).message };
+    }
+  }
+
+  async stopPriceTracking(canonicalProductId: string): Promise<{ ok: boolean; status: number; detail?: string }> {
+    if (!this.enabled) return { ok: false, status: 0, detail: "channel3 disabled (no api key)" };
+    try {
+      const { status } = await this.transport.post(
+        `${this.baseUrl}/v0/price-tracking/stop`,
+        { canonical_product_id: canonicalProductId },
+        this.apiKey as string,
+        this.timeoutMs,
+      );
+      return { ok: status === 200 || status === 201, status };
+    } catch (err) {
+      return { ok: false, status: 0, detail: (err as Error).message };
+    }
+  }
+
+  async priceHistory(canonicalProductId: string): Promise<Array<{ timestamp: string; price: number; currency: string }> | undefined> {
+    if (!this.enabled || !this.transport.get) return undefined;
+    try {
+      const { status, json } = await this.transport.get(
+        `${this.baseUrl}/v0/price-tracking/history/${encodeURIComponent(canonicalProductId)}`,
+        this.apiKey as string,
+        this.timeoutMs,
+      );
+      if (status !== 200) return undefined;
+      return (json as { price_history?: Array<{ timestamp: string; price: number; currency: string }> }).price_history;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async listPriceSubscriptions(): Promise<Array<{ canonical_product_id: string }> | undefined> {
+    if (!this.enabled || !this.transport.get) return undefined;
+    try {
+      const { status, json } = await this.transport.get(
+        `${this.baseUrl}/v0/price-tracking/subscriptions`,
+        this.apiKey as string,
+        this.timeoutMs,
+      );
+      if (status !== 200) return undefined;
+      return (json as { subscriptions?: Array<{ canonical_product_id: string }> }).subscriptions;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+/** The price-drop webhook they fire (documented shape, no signature scheme). */
+export interface PriceWebhookEvent {
+  type: string;
+  data?: { canonical_product_id?: string; new_price?: number | string; currency?: string; old_price?: number | string };
+}
+
+export function parsePriceWebhook(payload: unknown):
+  | { kind: "price.changed"; productId: string; newPrice: string; currency: string; oldPrice?: string }
+  | { kind: "ignored"; detail: string } {
+  const e = payload as PriceWebhookEvent;
+  if (!e || e.type !== "price.changed" || !e.data?.canonical_product_id) {
+    return { kind: "ignored", detail: "not a price.changed event (or missing canonical_product_id)" };
+  }
+  const price = typeof e.data.new_price === "number" ? e.data.new_price.toFixed(2) : e.data.new_price;
+  if (!price) return { kind: "ignored", detail: "missing new_price" };
+  const old = typeof e.data.old_price === "number" ? e.data.old_price.toFixed(2) : e.data.old_price;
+  return {
+    kind: "price.changed",
+    productId: e.data.canonical_product_id,
+    newPrice: price,
+    currency: e.data.currency ?? "USD",
+    ...(old ? { oldPrice: old } : {}),
+  };
 }
 
 /** Deterministic offline products, visibly labeled "sample" in the console.

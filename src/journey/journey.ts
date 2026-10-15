@@ -18,6 +18,8 @@ export interface JourneyItem {
   title: string;
   /** Payee / merchant domain — what the mandate allowlist will pin. */
   merchant?: string;
+  /** Channel3 canonical product id — the price-tracking hook for this line. */
+  productId?: string;
   /** Unit price, decimal string. */
   price: string;
   currency: string;
@@ -46,6 +48,7 @@ export interface Journey {
 export interface JourneyLineInput {
   title: string;
   merchant?: string;
+  productId?: string;
   price: string;
   quantity?: number;
 }
@@ -183,6 +186,7 @@ export class JourneyPlanner {
         id: randomUUID().slice(0, 8),
         title: String(l.title).slice(0, 140),
         ...(l.merchant ? { merchant: String(l.merchant).slice(0, 120) } : {}),
+        ...(l.productId ? { productId: String(l.productId).slice(0, 64) } : {}),
         price: l.price,
         currency: currency.toUpperCase(),
         quantity: Math.max(1, Math.min(99, Math.round(Number(l.quantity) || 1))),
@@ -208,6 +212,7 @@ export class JourneyPlanner {
       id: randomUUID().slice(0, 8),
       title: String(line.title).slice(0, 140),
       ...(line.merchant ? { merchant: String(line.merchant).slice(0, 120) } : {}),
+      ...(line.productId ? { productId: String(line.productId).slice(0, 64) } : {}),
       price: line.price,
       currency: j.currency,
       quantity: Math.max(1, Math.min(99, Math.round(Number(line.quantity) || 1))),

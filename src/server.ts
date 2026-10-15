@@ -18,7 +18,7 @@ import { PreferenceStore } from "./agent/preferences.js";
 import { TrackRecordService } from "./agent/trackrecord.js";
 import { configureAutopilot, runAutopilot, autopilotAvailable } from "./agent/autopilot.js";
 import { buildEvidencePack, fulfillmentFor, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
-import { Channel3Catalog } from "./catalog/channel3.js";
+import { Channel3Catalog, parsePriceWebhook } from "./catalog/channel3.js";
 
 import { loadEnvFile } from "./lib/env.js";
 
@@ -61,6 +61,7 @@ const preferences = new PreferenceStore(STATE_DIR, journal);
 const trackRecords = new TrackRecordService(journal, keys.server);
 
 const app = express();
+app.set("trust proxy", 1); // behind Render's proxy: req.protocol must be https for the OIDC redirect URI
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
@@ -265,13 +266,14 @@ app.post("/api/journeys", (req, res) => {
   const body = req.body as {
     name?: string;
     currency?: string;
-    items?: Array<{ title?: string; merchant?: string; price?: string; quantity?: number }>;
+    items?: Array<{ title?: string; merchant?: string; product_id?: string; price?: string; quantity?: number }>;
   };
   const lines = (body.items ?? [])
     .filter((l) => l.title && l.price && /^\d+(\.\d+)?$/.test(String(l.price)))
     .map((l) => ({
       title: String(l.title),
       ...(l.merchant ? { merchant: String(l.merchant) } : {}),
+      ...(l.product_id ? { productId: String(l.product_id) } : {}),
       price: String(l.price),
       quantity: Number(l.quantity) || 1,
     }));
@@ -281,13 +283,14 @@ app.post("/api/journeys", (req, res) => {
 });
 
 app.post("/api/journeys/:id/lines", (req, res) => {
-  const body = req.body as { title?: string; merchant?: string; price?: string; quantity?: number };
+  const body = req.body as { title?: string; merchant?: string; product_id?: string; price?: string; quantity?: number };
   if (!body.title || !body.price || !/^\d+(\.\d+)?$/.test(String(body.price))) {
     return res.status(400).json({ error: "title and numeric price are required" });
   }
   const j = journeys.addLine(req.params.id, {
     title: String(body.title),
     ...(body.merchant ? { merchant: String(body.merchant) } : {}),
+    ...(body.product_id ? { productId: String(body.product_id) } : {}),
     price: String(body.price),
     quantity: Number(body.quantity) || 1,
   });
@@ -812,8 +815,11 @@ app.get("/api/disputes/:id/evidence-pack", async (req, res) => {
 // The fulfillment slot: carrier + tracking for an order, journalled (tamper-
 // evident) and shaped for PayPal's PROOF_OF_FULFILLMENT tracking_info. The
 // merchant's fulfillment system posts here; every dispute on that order gains
-// the slot automatically at pack-generation time.
-app.post("/api/orders/:orderId/fulfillment", (req, res) => {
+// the slot automatically at pack-generation time. On sandbox/live rails the
+// same record is ALSO pushed to PayPal's Shipment Tracking (/v1/shipping/
+// trackers) — the tracker sits on THEIR record: faster fund release, Seller
+// Protection eligibility, dispute evidence at the arbiter's side of the table.
+app.post("/api/orders/:orderId/fulfillment", async (req, res) => {
   const body = (req.body ?? {}) as { carrier?: string; tracking_number?: string; shipped_at?: string };
   const carrier = String(body.carrier ?? "").trim().slice(0, 80);
   const tracking = String(body.tracking_number ?? "").trim().slice(0, 80);
@@ -828,12 +834,55 @@ app.post("/api/orders/:orderId/fulfillment", (req, res) => {
     shipped_at: shippedAt,
     source: "merchant fulfillment",
   });
+
+  // Bilateral mode: also register the tracker on PayPal's side.
+  let paypalTracker: { ok: boolean; trackerId?: string; httpStatus: number; detail?: string } | undefined;
+  if (rails.mode !== "mock" && paypal) {
+    const receipt = enforcer.listReceipts().find((r) => r.orderId === req.params.orderId);
+    if (receipt) {
+      // PayPal's carrier field draws from their supported list; uppercase
+      // snake is the closest safe projection — a rejection is journaled
+      // honestly, the local slot stands either way.
+      const paypalCarrier = carrier.toUpperCase().replace(/\s+/g, "_").slice(0, 40);
+      const tr = await paypal.createTracker({
+        captureId: receipt.captureId,
+        trackingNumber: tracking,
+        carrier: paypalCarrier,
+      });
+      const tid = (tr.data as { tracker_identifiers?: Array<{ transaction_id: string; tracking_number: string }> } | undefined)
+        ?.tracker_identifiers?.[0];
+      const trackerId = tid ? `${tid.transaction_id}-${tid.tracking_number}` : undefined;
+      paypalTracker = {
+        ok: tr.ok,
+        ...(trackerId ? { trackerId } : {}),
+        httpStatus: tr.status,
+        ...(!tr.ok ? { detail: JSON.stringify(tr.data ?? {}).slice(0, 300) } : {}),
+      };
+      journal.append("paypal_tracker_created", {
+        order_id: req.params.orderId,
+        capture_id: receipt.captureId,
+        carrier: paypalCarrier,
+        tracking_number: tracking,
+        ok: tr.ok,
+        ...(trackerId ? { tracker_id: trackerId } : {}),
+        paypal_status: tr.status,
+      });
+    } else {
+      paypalTracker = { ok: false, httpStatus: 0, detail: "no captured receipt for this order — tracker needs a capture id" };
+    }
+  }
+
   res.status(201).json({
     ok: true,
     journaled: { seq: event.seq, event_hash: event.hash, ts: event.ts },
     order_id: req.params.orderId,
     evidence_slot: "PROOF_OF_FULFILLMENT",
-    note: "every evidence pack for a dispute on this order now covers the fulfillment slot",
+    ...(paypalTracker ? { paypal_tracker: paypalTracker } : {}),
+    note: paypalTracker
+      ? paypalTracker.ok
+        ? "journalled AND registered on PayPal's record (seller protection + faster fund release)"
+        : "journalled locally; PayPal tracker rejected — see paypal_tracker.detail"
+      : "journalled (mock rails: PayPal tracker is a sandbox/live operation)",
   });
 });
 
@@ -928,6 +977,165 @@ app.post("/api/disputes/seed-sample", async (req, res) => {
     reason: String(body.reason ?? "ITEM_NOT_RECEIVED"),
   });
   res.json(result);
+});
+
+// --- Channel3 price tracking: "time-to-buy" for standing baskets --------------
+// Track a journey line's canonical product; Channel3 fires a webhook the
+// moment the price moves. The drop is journalled — then the buyer/agent re-runs
+// the cycle under the SAME recurring mandate and the walls still apply. This
+// is the sponsor-pairing story: their deal-finder machinery, our enforcement.
+// (Webhook endpoint registration happens in THEIR dashboard — account-side.)
+
+app.post("/api/catalog/track", async (req, res) => {
+  const body = (req.body ?? {}) as { product_id?: string; title?: string };
+  const productId = String(body.product_id ?? "").trim().slice(0, 64);
+  if (!productId) return res.status(400).json({ error: "product_id is required (a Channel3 canonical product id)" });
+  if (!catalog.enabled) return res.status(409).json({ error: "channel3 disabled (no api key) — tracking is a live-API surface" });
+  const out = await catalog.startPriceTracking(productId);
+  const event = journal.append("channel3_price_tracking_started", {
+    product_id: productId,
+    ...(body.title ? { title: String(body.title).slice(0, 140) } : {}),
+    ok: out.ok,
+    channel3_status: out.status,
+  });
+  res.status(out.ok ? 201 : 502).json({
+    ok: out.ok,
+    product_id: productId,
+    channel3_status: out.status,
+    ...(out.detail ? { detail: out.detail } : {}),
+    journaled: { seq: event.seq },
+    note: out.ok ? "webhooks arrive at POST /api/webhooks/channel3 (register it in the Channel3 dashboard)" : undefined,
+  });
+});
+
+app.get("/api/catalog/track", async (_req, res) => {
+  if (!catalog.enabled) return res.status(409).json({ error: "channel3 disabled (no api key)" });
+  const subs = await catalog.listPriceSubscriptions();
+  if (!subs) return res.status(502).json({ error: "channel3 subscriptions unavailable" });
+  res.json({ subscriptions: subs });
+});
+
+app.delete("/api/catalog/track/:productId", async (req, res) => {
+  if (!catalog.enabled) return res.status(409).json({ error: "channel3 disabled (no api key)" });
+  const out = await catalog.stopPriceTracking(req.params.productId);
+  journal.append("channel3_price_tracking_stopped", { product_id: req.params.productId, ok: out.ok, channel3_status: out.status });
+  res.status(out.ok ? 200 : 502).json({ ok: out.ok, channel3_status: out.status });
+});
+
+app.get("/api/catalog/track/:productId/history", async (req, res) => {
+  if (!catalog.enabled) return res.status(409).json({ error: "channel3 disabled (no api key)" });
+  const history = await catalog.priceHistory(req.params.productId);
+  if (!history) return res.status(502).json({ error: "price history unavailable for this product" });
+  res.json({ product_id: req.params.productId, price_history: history });
+});
+
+// Their webhook: {type:"price.changed", data:{canonical_product_id,new_price,currency}}.
+// Their docs document NO signature scheme — so we journal honestly (unverified
+// by construction) and the evidence layer treats it as a TRIGGER, not as proof.
+app.post("/api/webhooks/channel3", (req, res) => {
+  const parsed = parsePriceWebhook(req.body);
+  if (parsed.kind === "ignored") {
+    return res.status(202).json({ received: true, ignored: true, detail: parsed.detail });
+  }
+  // which journeys care about this product?
+  const affected = journeys.list().filter((j) => j.items.some((i) => i.productId === parsed.productId));
+  const event = journal.append("channel3_price_drop", {
+    product_id: parsed.productId,
+    new_price: parsed.newPrice,
+    currency: parsed.currency,
+    ...(parsed.oldPrice ? { old_price: parsed.oldPrice } : {}),
+    source: "channel3 webhook",
+    signature: "none documented by channel3 — treated as a trigger, not as proof",
+    ...(affected.length ? { journeys: affected.map((j) => j.id) } : {}),
+  });
+  res.json({ received: true, journaled: { seq: event.seq }, journeys_affected: affected.length });
+});
+
+// Demo injection, visibly labeled SAMPLE: lets the drop→re-run story play in
+// front of judges without waiting for a real market move.
+app.post("/api/catalog/price-sample", (req, res) => {
+  const body = (req.body ?? {}) as { product_id?: string; price?: string; old_price?: string; currency?: string };
+  const productId = String(body.product_id ?? "").trim().slice(0, 64);
+  const price = /^\d+(\.\d+)?$/.test(String(body.price ?? "")) ? String(body.price) : "";
+  if (!productId || !price) return res.status(400).json({ error: "product_id and numeric price are required" });
+  const oldPrice = /^\d+(\.\d+)?$/.test(String(body.old_price ?? "")) ? String(body.old_price) : undefined;
+  const affected = journeys.list().filter((j) => j.items.some((i) => i.productId === productId));
+  const event = journal.append("channel3_price_drop", {
+    product_id: productId,
+    new_price: price,
+    ...(oldPrice ? { old_price: oldPrice } : {}),
+    currency: String(body.currency ?? "USD"),
+    source: "sample injection (demo)",
+    ...(affected.length ? { journeys: affected.map((j) => j.id) } : {}),
+  });
+  res.status(201).json({ ok: true, journaled: { seq: event.seq }, journeys_affected: affected.length });
+});
+
+// --- Log in with PayPal (the REAL one) -----------------------------------------
+// Connect with PayPal, OpenID Connect: authorize on paypal.com, exchange the
+// code at the identity tokenservice, read the buyer at userinfo. The demo
+// email login stays as the honest fallback (Connect needs the redirect URI
+// registered on the app — developer dashboard, account-side).
+
+const oidcStates = new Map<string, string>(); // state → next path (anti-CSRF, one-time)
+
+const safeNext = (n: unknown): string =>
+  typeof n === "string" && n.startsWith("/") && !n.startsWith("//") ? n : "/";
+
+app.get("/api/auth/paypal/start", (req, res) => {
+  if (!process.env.PAYPAL_CLIENT_ID || !paypal) {
+    return res.redirect("/login?error=" + encodeURIComponent("PayPal login not configured (missing client credentials)"));
+  }
+  const state = randomBytes(16).toString("hex");
+  oidcStates.set(state, safeNext((req.query as { next?: string }).next));
+  const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
+  const redirectUri = `${base}/api/auth/paypal/callback`;
+  const envPrefix = process.env.PAYPAL_ENV === "live" ? "www" : "www.sandbox";
+  const authorize = new URL("https://" + envPrefix + ".paypal.com/connect/");
+  authorize.searchParams.set("client_id", process.env.PAYPAL_CLIENT_ID);
+  authorize.searchParams.set("scope", "openid profile email");
+  authorize.searchParams.set("response_type", "code");
+  authorize.searchParams.set("redirect_uri", redirectUri);
+  authorize.searchParams.set("state", state);
+  res.redirect(authorize.toString());
+});
+
+app.get("/api/auth/paypal/callback", async (req, res) => {
+  const q = req.query as { code?: string; state?: string; error?: string; error_description?: string };
+  const fail = (reason: string, detail: string) => {
+    journal.append("paypal_login_failed", { reason, detail: detail.slice(0, 200) });
+    return res.redirect("/login?error=" + encodeURIComponent(`paypal: ${reason}`));
+  };
+  const nextPath = q.state ? oidcStates.get(q.state) : undefined;
+  if (q.error) return fail("denied", q.error_description ?? q.error);
+  if (!q.code || !q.state || !oidcStates.delete(q.state)) return fail("state", "missing/unknown state (anti-CSRF miss)");
+  if (!paypal) return fail("unconfigured", "no paypal client");
+  const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
+  const tok = await paypal.oidcTokenExchange({ code: q.code, redirectUri: `${base}/api/auth/paypal/callback` });
+  const accessToken = tok.data?.access_token;
+  if (!tok.ok || !accessToken) {
+    return fail("exchange", `tokenservice ${tok.status}: usually the redirect URI is not registered on the app, or the Connect feature is not enabled (developer dashboard)`);
+  }
+  const ui = await paypal.oidcUserinfo(accessToken);
+  if (!ui.ok) return fail("userinfo", `userinfo ${ui.status}`);
+  const payerId = String(ui.data.payer_id ?? ui.data.user_id ?? "");
+  const email = typeof ui.data.email === "string" ? ui.data.email : "";
+  if (!payerId && !email) return fail("userinfo", "empty profile");
+  const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
+  const token = randomBytes(32).toString("hex");
+  sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+  );
+  // Minimization: the journal proves WHO logged in without archiving the email.
+  journal.append("paypal_login", {
+    sub,
+    email_domain: email.includes("@") ? email.split("@")[1] : undefined,
+    name_given: typeof ui.data.given_name === "string" ? (ui.data.given_name as string).slice(0, 40) : undefined,
+    oidc: true,
+  });
+  res.redirect(nextPath ?? "/");
 });
 
 function formatForApi(minor: bigint, currency: string): string {

@@ -34,6 +34,14 @@
   .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
   .ghost { background: #fff; border: 1px solid #c8cdd6; color: var(--text); }
   .ghost:hover { background: #f5f8fc; }
+  .paypal-btn { display: flex; align-items: center; justify-content: center; gap: 8px;
+                width: 100%; border-radius: 22px; padding: 12px 18px; font-size: 15px;
+                font-weight: 700; font-family: inherit; cursor: pointer; margin: 4px 0 6px;
+                background: #ffc439; color: #003087; text-decoration: none; border: 0; }
+  .paypal-btn:hover { background: #f2b925; }
+  .pp-logo { font-weight: 800; font-style: italic; letter-spacing: -0.3px; }
+  .pp-logo .pp-pay { color: #003087; }
+  .pp-logo .pp-pal { color: #0070e0; }
   .note { width: 400px; max-width: calc(100vw - 32px); color: var(--muted); font-size: 11.5px;
           line-height: 1.55; margin: 22px 0 40px; text-align: center; }
   .note a { color: var(--blue); text-decoration: none; }
@@ -46,6 +54,10 @@
 <div class="card">
   <h1>Log in</h1>
   <p class="sub">Open the merchant console with your PayPal sandbox account.</p>
+  <a class="paypal-btn" id="paypal-login" href="/api/auth/paypal/start">
+    <span class="pp-logo"><span class="pp-pay">Pay</span><span class="pp-pal">Pal</span></span>
+    Log in with PayPal
+  </a>
   <form id="form">
     <label for="email">Email or mobile number</label>
     <input id="email" type="text" autocomplete="username" placeholder="merchant@example.com" />
@@ -59,9 +71,11 @@
 </div>
 
 <p class="note">
-  Simulation — this login is part of a hackathon demo concept on sandbox rails. No real PayPal
-  authentication happens; any credentials open the sandbox session. Receipt verification needs no
-  account: <a href="/verify">verify a receipt publicly</a>.
+  The <b>Log in with PayPal</b> button is the REAL Connect-with-PayPal flow (OpenID Connect,
+  sandbox) — it needs the app's redirect URI registered in the developer dashboard. Until then it
+  lands back here with an honest error, and the demo forms keep working: they open a real
+  server-side session with fake credentials. Receipt verification needs no account:
+  <a href="/verify">verify a receipt publicly</a>.
 </p>
 
 <script>
@@ -69,6 +83,16 @@ const params = new URLSearchParams(location.search);
 const next = params.get("next")?.startsWith("/") && !params.get("next")?.startsWith("//")
   ? params.get("next")
   : "/dashboard";
+
+// carry the intended destination through the OAuth round-trip
+if (params.get("next") && next !== "/dashboard") {
+  const p = document.getElementById("paypal-login");
+  p.href = "/api/auth/paypal/start?next=" + encodeURIComponent(next);
+}
+{
+  const err = params.get("error");
+  if (err) document.getElementById("error").textContent = "PayPal login: " + err + " — the demo login below still works.";
+}
 
 async function enter(body) {
   const res = await fetch("/api/auth/login", {

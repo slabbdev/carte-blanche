@@ -80,6 +80,8 @@
   .summary .big { font-size: 22px; font-weight: 800; }
   .summary .k { font-size: 10.5px; font-weight: 800; letter-spacing: 0.8px; color: var(--muted); text-transform: uppercase; }
   .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .buy-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .buy-row .amt { font-weight: 700; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -140,7 +142,14 @@
   </section>
 
   <section class="card">
-    <h2>3 · Execution board</h2>
+    <h2>3 · Price watch <span class="pill paypal" style="margin-left:6px">CHANNEL3 WEBHOOKS</span></h2>
+    <p class="sub">Track a catalog line and Channel3 fires the moment the price moves. The drop is
+    journalled as a trigger — the re-purchase still runs through the signed mandate walls.</p>
+    <div id="price-watch"><div class="empty">loading…</div></div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Execution board</h2>
     <p class="sub">The same lines, as the run sees them — planned, purchased, or refused with the reason.</p>
     <div id="board"></div>
   </section>
@@ -337,12 +346,16 @@ $("cat-search").onclick = async () => {
           <div class="foot">
             <span class="price">${esc(p.price ?? "—")}</span>
             <span class="meta" style="margin-left:auto">${p.offers.length > 1 ? p.offers.length + " merchants" : ""}</span>
+            ${p.id ? `<button type="button" class="ghost watch-line" data-idx="${idx}" title="Channel3 price tracking — a webhook lands here the moment the price moves">👁 watch</button>` : ""}
             <button type="button" class="ghost add-line" data-idx="${idx}">+ add</button>
           </div>
         </div>`).join("") + "</div>"
       : '<div class="empty">no product for that query</div>';
     document.querySelectorAll(".add-line").forEach((el) => {
       el.onclick = () => addLine(PRODUCTS[Number(el.dataset.idx)]);
+    });
+    document.querySelectorAll(".watch-line").forEach((el) => {
+      el.onclick = () => watchPrice(PRODUCTS[Number(el.dataset.idx)], el);
     });
   } catch (e) {
     $("cat-results").innerHTML = '<div class="empty">catalog error: ' + esc(e.message) + "</div>";
@@ -358,19 +371,98 @@ async function addLine(p) {
         body: JSON.stringify({
           name: $("j-name").value || "shopping journey",
           currency: "USD",
-          items: [{ title: p.title, ...(p.website ? { merchant: p.website } : {}), price: p.price }],
+          items: [{ title: p.title, ...(p.website ? { merchant: p.website } : {}), ...(p.id ? { product_id: p.id } : {}), price: p.price }],
         }),
       });
     } else {
       JOURNEY = await api("/api/journeys/" + encodeURIComponent(JOURNEY.id) + "/lines", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: p.title, ...(p.website ? { merchant: p.website } : {}), price: p.price, quantity: 1 }),
+        body: JSON.stringify({ title: p.title, ...(p.website ? { merchant: p.website } : {}), ...(p.id ? { product_id: p.id } : {}), price: p.price, quantity: 1 }),
       });
     }
     renderJourney();
   } catch (e) { $("j-hint").textContent = "✗ " + e.message; }
 }
+
+// Channel3 price tracking: watch a product, get the drop in the panel below.
+// The drop is a TRIGGER — the re-purchase still goes through the mandate walls.
+async function watchPrice(p, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "…"; }
+  try {
+    const r = await api("/api/catalog/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: p.id, title: p.title }),
+    });
+    if (btn) btn.textContent = "👁 watched";
+    $("j-hint").textContent = "👁 price watch on: " + (p.title || "").slice(0, 60) + " — drops land in the panel below (webhook endpoint must be registered in the Channel3 dashboard).";
+    loadPriceWatch().catch(() => {});
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "👁 watch"; }
+    $("j-hint").textContent = "✗ " + e.message;
+  }
+}
+
+async function loadPriceWatch() {
+  const box = $("price-watch");
+  if (!box) return;
+  const events = await api("/api/journal/events?limit=100").catch(() => ({ events: [] }));
+  const drops = (events.events ?? []).filter((e) => e.type === "channel3_price_drop").slice(-6).reverse();
+  box.innerHTML =
+    '<div class="muted" style="font-size:10.5px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px">Price watch — Channel3 webhooks, journalled</div>' +
+    (drops.length
+      ? drops.map((e) => {
+          const d = e.data ?? {};
+          const sample = d.source && String(d.source).includes("sample");
+          return `<div class="buy-row"><span class="pill ${sample ? "mock" : "paypal"}">${sample ? "SAMPLE" : "LIVE"}</span>` +
+            `<span class="mono">${esc(String(d.product_id ?? ""))}</span>` +
+            `<span class="muted">${esc(String(d.old_price ?? "—"))} →</span>` +
+            `<span class="amt">${esc(String(d.new_price ?? ""))} ${esc(String(d.currency ?? ""))}</span>` +
+            `<button type="button" class="ghost" style="padding:4px 12px;font-size:12px" onclick="reactToDrop('${esc(String(d.product_id ?? ""))}')">re-run the cycle</button></div>`;
+        }).join("")
+      : '<div class="empty">no price movement yet — watch a product above, or inject a sample drop to see the story</div>') +
+    '<div style="margin-top:6px"><button type="button" class="ghost" style="padding:4px 12px;font-size:12px" onclick="injectSampleDrop()">inject sample drop</button> <span class="muted" style="font-size:11.5px">labeled SAMPLE in the journal — the re-run still meets the signed walls</span></div>';
+}
+
+window.injectSampleDrop = async () => {
+  const drops = ($("price-watch")?.innerText ?? "").length;
+  void drops;
+  // target the first tracked journey line if any, else a demo id
+  const line = (JOURNEY?.items ?? []).find((i) => i.productId);
+  try {
+    await api("/api/catalog/price-sample", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_id: line?.productId ?? "sample-price-watch",
+        old_price: line?.price ?? "24.00",
+        price: line ? (Math.max(1, Number(line.price) * 0.7)).toFixed(2) : "17.00",
+        currency: JOURNEY?.currency ?? "USD",
+      }),
+    });
+    loadPriceWatch().catch(() => {});
+  } catch (e) { $("j-hint").textContent = "✗ " + e.message; }
+};
+
+window.reactToDrop = async (productId) => {
+  if (!JOURNEY?.mandateId) { $("j-hint").textContent = "approve the journey first — the re-run needs its mandate"; return; }
+  const cycle = ($("j-cycle")?.value ?? "").trim() || new Date().toISOString().slice(0, 7);
+  $("j-hint").textContent = "price drop → re-running cycle " + cycle + " under the same mandate…";
+  try {
+    JOURNEY = await api("/api/journeys/" + encodeURIComponent(JOURNEY.id) + "/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cycle }),
+    });
+    const bought = JOURNEY.items.filter((i) => i.status === "receipt").length;
+    const refused = JOURNEY.items.filter((i) => i.status === "refused").length;
+    $("j-hint").textContent = `done — ${bought} purchased, ${refused} refused at the new price. Walls applied: same mandate, same windows.`;
+    renderJourney();
+  } catch (e) { $("j-hint").textContent = "✗ " + e.message; }
+};
+
+loadPriceWatch().catch(() => {});
 
 refreshJourney().catch(() => {});
 </script>

@@ -158,6 +158,73 @@ export class PayPalClient {
     return this.request("POST", `/v2/payments/captures/${encodeURIComponent(args.captureId)}/refund`, body, args.requestId);
   }
 
+  /**
+   * Shipment Tracking v1: put the carrier + tracking number on PAYPAL'S OWN
+   * record for a capture. Their documented payoff: faster access to funds,
+   * Seller Protection eligibility, and dispute evidence sitting at the
+   * arbiter's side of the table — the bilateral completion of our journalled
+   * fulfillment slot. Schema (verified against their definitions page AND a
+   * live 400): REQUIRED `transaction_id` (the capture id serves) + `status`;
+   * `carrier` draws from PayPal's supported carrier list.
+   */
+  async createTracker(args: {
+    captureId: string;
+    trackingNumber: string;
+    carrier: string;
+    status?: string;
+  }): Promise<PayPalResponse<{ tracker_identifiers?: Array<{ transaction_id: string; tracking_number: string }> }>> {
+    const body = {
+      trackers: [
+        {
+          transaction_id: args.captureId,
+          tracking_number: args.trackingNumber,
+          carrier: args.carrier,
+          status: args.status ?? "SHIPPED",
+        },
+      ],
+    };
+    return this.request("POST", "/v1/shipping/trackers", body, undefined);
+  }
+
+  /**
+   * Log in with PayPal (Connect with PayPal, OpenID Connect). Sandbox has the
+   * full flow: authorize at www.sandbox.paypal.com/connect, exchange the code
+   * at the identity tokenservice, read the buyer at userinfo. The redirect
+   * URI must be registered on the app (developer dashboard, account-side).
+   */
+  async oidcTokenExchange(args: {
+    code: string;
+    redirectUri: string;
+  }): Promise<PayPalResponse<{ access_token?: string; refresh_token?: string; openid?: string }>> {
+    const basic = Buffer.from(`${this.cfg.clientId}:${this.cfg.clientSecret}`).toString("base64");
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      code: args.code,
+      redirect_uri: args.redirectUri,
+    });
+    const res = await this.fetchImpl(`${HOSTS[this.cfg.env]}/v1/identity/openidconnect/tokenservice`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "carte-blanche/0.2.0",
+      },
+      body: body.toString(),
+    });
+    const raw = await res.text();
+    const data = (raw.trim() ? (JSON.parse(raw) as { access_token?: string }) : {}) as { access_token?: string };
+    return { status: res.status, ok: res.ok, data };
+  }
+
+  async oidcUserinfo(accessToken: string): Promise<PayPalResponse<Record<string, unknown>>> {
+    const res = await this.fetchImpl(`${HOSTS[this.cfg.env]}/v1/identity/oauth2/userinfo?schema=openid`, {
+      headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": "carte-blanche/0.2.0" },
+    });
+    const raw = await res.text();
+    const data = (raw.trim() ? (JSON.parse(raw) as Record<string, unknown>) : {}) as Record<string, unknown>;
+    return { status: res.status, ok: res.ok, data };
+  }
+
   async listDisputes(): Promise<PayPalResponse<{ links?: unknown[]; items?: Array<{ dispute_id: string; status: string; reason: string }> }>> {
     return this.request("GET", "/v1/customer/disputes", undefined, undefined);
   }
