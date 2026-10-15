@@ -63,8 +63,13 @@ export default function Board() {
       ],
       columnField: "status",
       readOnly: true,
-      project: { events: eventsFor(rows), resources: [{ id: "merchant", name: "Merchant disputes" }], fields: ["amount", "respondBy", "left", "receiptId", "stage"] },
-      taskRenderer: ({ taskRecord }: any) => `
+      project: {
+        eventStore: { data: eventsFor(rows), fields: ["amount", "respondBy", "left", "receiptId", "stage"] },
+        resources: [{ id: "merchant", name: "Merchant disputes" }],
+      },
+      taskRenderer: ({ taskRecord, cardConfig }: any) => {
+        // v7: mutate cardConfig — a returned string is ignored
+        cardConfig.html = `
         <div class="tb-title">${esc(taskRecord.name)}</div>
         <div class="tb-id">${esc(taskRecord.id)}</div>
         <div class="tb-meta">
@@ -76,7 +81,8 @@ export default function Board() {
           ${taskRecord.receiptId ? '<a href="/verify/' + encodeURIComponent(taskRecord.receiptId) + '" target="_blank" rel="noopener">verify receipt →</a>' : ""}
           <a href="/api/disputes/${encodeURIComponent(taskRecord.id)}/evidence-pack" target="_blank" rel="noopener">evidence ↓</a>
           <a href="/dashboard">cockpit →</a>
-        </div>`,
+        </div>`;
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tbReady]);

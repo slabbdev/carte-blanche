@@ -50,7 +50,7 @@ export default function Planner() {
 
   const gridCols = useMemo(() => [
     { field: "title", headerName: "Item", minWidth: 220, flex: 2 },
-    { field: "merchant", headerName: "Merchant", minWidth: 130, cellRenderer: (p: any) => (p.value ? `<span class="mono">${esc(p.value)}</span>` : "—") },
+    { field: "merchant", headerName: "Merchant", minWidth: 130, cellRenderer: (p: any) => (p.value ? <span className="mono">{p.value}</span> : "—") },
     { field: "price", headerName: "Unit", minWidth: 90, valueFormatter: (p: any) => (p.value ?? "—") + " " + (p.data?.currency ?? "") },
     { field: "quantity", headerName: "Qty", maxWidth: 80 },
     { headerName: "Line total", minWidth: 110, valueGetter: (p: any) => {
@@ -59,10 +59,10 @@ export default function Planner() {
         return (unit * qty).toFixed(2) + " " + (p.data.currency || "");
       } },
     { field: "status", headerName: "Status", minWidth: 120, cellRenderer: (p: any) =>
-        p.value === "receipt" ? '<span class="pill ok">PURCHASED</span>' : p.value === "refused" ? '<span class="pill no">REFUSED</span>' : '<span class="pill mock">PLANNED</span>' },
+        p.value === "receipt" ? <span className="pill ok">PURCHASED</span> : p.value === "refused" ? <span className="pill no">REFUSED</span> : <span className="pill mock">PLANNED</span> },
     { headerName: "Outcome", minWidth: 150, cellRenderer: (p: any) => p.data?.outcomeId
-        ? `<a class="mono" href="/verify/${encodeURIComponent(p.data.outcomeId)}">${esc(p.data.outcomeId)}</a>` : "—" },
-    { field: "detail", headerName: "Detail", minWidth: 200, flex: 1, cellRenderer: (p: any) => (p.value ? `<span style="font-size:12px;color:var(--muted)">${esc(p.value)}</span>` : "") },
+        ? <a className="mono" href={`/verify/${encodeURIComponent(p.data.outcomeId)}`}>{p.data.outcomeId}</a> : "—"},
+    { field: "detail", headerName: "Detail", minWidth: 200, flex: 1, cellRenderer: (p: any) => (p.value ? <span style={{ fontSize: 12, color: "var(--muted)" }}>{p.value}</span> : "") },
   ], []);
 
   const boardEvents = (journey?.items ?? []).map((i) => {
@@ -85,15 +85,20 @@ export default function Planner() {
       columnField: "status",
       readOnly: true,
       project: {
-        events: boardEvents,
+        eventStore: {
+          data: boardEvents,
+          // fields belong to the eventStore config — declaring them anywhere else
+          // makes Bryntum mutate an already-generated model (getter-only throw)
+          fields: ["price", "quantity", "total", "merchant", "productId", "outcomeId", "detail"],
+        },
         resources: [{ id: "journey", name: "Journey lines" }],
-        fields: ["price", "quantity", "total", "merchant", "productId", "outcomeId", "detail"],
       },
-      taskRenderer: ({ taskRecord }: any) => {
+      taskRenderer: ({ taskRecord, cardConfig }: any) => {
         const t = taskRecord;
         const pill = t.status === "purchased" ? '<span class="pill ok">PURCHASED</span>'
           : t.status === "refused" ? '<span class="pill no">REFUSED</span>' : '<span class="pill mock">PLANNED</span>';
-        return `
+        // v7: the renderer MUTATES cardConfig — a returned string is ignored
+        cardConfig.html = `
         <div class="tb-title">${esc(t.name)}</div>
         <div class="tb-line"><span class="price">${esc(t.total)}</span><span class="muted">(${esc(t.price)} × ${esc(String(t.quantity))})</span></div>
         <div class="tb-merchant">${esc(t.merchant || "—")}${t.productId ? ' · <span class="mono">' + esc(t.productId) + "</span>" : ""}</div>

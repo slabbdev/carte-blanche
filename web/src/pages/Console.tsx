@@ -303,6 +303,7 @@ export default function Console() {
           </div>
           {clientId ? (
             <PayPalScriptProvider options={{ clientId, currency: "USD", intent: "capture" }}>
+              <div className="pp-zone">
               <PayPalButtons
                 style={{ layout: "horizontal", label: "paypal" }}
                 disabled={!selMandate}
@@ -325,6 +326,7 @@ export default function Console() {
                 }}
                 onError={(err) => setOutcome("✗ PayPal: " + esc(String(err)))}
               />
+              </div>
             </PayPalScriptProvider>
           ) : (
             <div className="empty">loading PayPal SDK config…</div>

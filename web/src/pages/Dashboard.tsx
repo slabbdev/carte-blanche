@@ -40,6 +40,7 @@ export default function Dashboard() {
   const calDiv = useRef<HTMLDivElement>(null);
   const calRef = useRef<any>(null);
   const calReady = useScript("/vendor/bryntum/calendar.umd.js", () => Boolean((window as any).bryntum?.Calendar));
+  const chartsReady = useScript("/vendor/charts/ag-charts-community.min.js", () => Boolean((window as any).agCharts?.AgCharts));
 
   const load = async () => {
     try {
@@ -55,7 +56,7 @@ export default function Dashboard() {
   // charts
   useEffect(() => {
     const Charts = (window as any).agCharts?.AgCharts;
-    if (!Charts || tab !== "sales") return;
+    if (!chartsReady || !Charts || tab !== "sales") return;
     const byStatus: Record<string, number> = {};
     const byReason: Record<string, number> = {};
     for (const d of disputes) {
@@ -74,7 +75,7 @@ export default function Dashboard() {
     make(chartRefs.status.current, Object.entries(byStatus).map(([status, count]) => ({ status, count })), "status", "count", "#0070e0");
     make(chartRefs.reason.current, Object.entries(byReason).map(([reason, total]) => ({ reason, total })), "reason", "total", "#ffc43d");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disputes, tab]);
+  }, [disputes, tab, chartsReady]);
 
   // calendar
   useEffect(() => {
@@ -150,16 +151,16 @@ export default function Dashboard() {
     { field: "respondBy", headerName: "Deadline", pinned: "left", minWidth: 150, flex: 1.2, sort: "asc",
       valueGetter: (p: any) => { const d = daysLeft(p.data?.respondBy); return d === null ? "—" : d + " day" + (d === 1 ? "" : "s") + " left"; },
       cellRenderer: (p: any) => { const d = daysLeft(p.data?.respondBy); if (d === null) return "—";
-        return `<span class="${d <= 3 ? "pill dead" : "pill open"}">${d}d left</span>`; } },
-    { field: "disputeId", headerName: "Dispute", minWidth: 140, cellRenderer: (p: any) => `<span class="mono">${esc(p.value)}</span>` },
-    { field: "status", headerName: "Status", minWidth: 160, cellRenderer: (p: any) => statusPill(p.value) },
-    { field: "stage", headerName: "Stage", minWidth: 140, cellRenderer: (p: any) => (p.value ? stagePill(p.value) : '<span class="pill mock">—</span>') },
+        return <span className={d <= 3 ? "pill dead" : "pill open"}>{d}d left</span>; } },
+    { field: "disputeId", headerName: "Dispute", minWidth: 140, cellRenderer: (p: any) => <span className="mono">{p.value}</span> },
+    { field: "status", headerName: "Status", minWidth: 160, cellRenderer: (p: any) => <span dangerouslySetInnerHTML={{ __html: statusPill(p.value) }} /> },
+    { field: "stage", headerName: "Stage", minWidth: 140, cellRenderer: (p: any) => (p.value ? <span dangerouslySetInnerHTML={{ __html: stagePill(p.value) }} /> : <span className="pill mock">—</span>) },
     { field: "reason", headerName: "Reason", minWidth: 200, valueFormatter: (p: any) => String(p.value ?? "").replaceAll("_", " ") },
     { field: "amount", headerName: "Amount", maxWidth: 130, valueFormatter: (p: any) => (p.value ?? "—") + " " + (p.data?.currency ?? "") },
     { headerName: "Linked receipt", minWidth: 150, cellRenderer: (p: any) => p.data?.linkedReceiptId
-        ? `<a class="mono" href="/verify/${encodeURIComponent(p.data.linkedReceiptId)}">${esc(p.data.linkedReceiptId)}</a>` : "—" },
+        ? <a className="mono" href={`/verify/${encodeURIComponent(p.data.linkedReceiptId)}`}>{p.data.linkedReceiptId}</a> : "—"},
     { field: "source", headerName: "Source", minWidth: 110, cellRenderer: (p: any) =>
-        p.value === "paypal" ? '<span class="pill paypal">PAYPAL</span>' : '<span class="pill mock">MOCK</span>' },
+        p.value === "paypal" ? <span className="pill paypal">PAYPAL</span> : <span className="pill mock">MOCK</span> },
   ], []);
 
   const rec = pack?.pack?.recommendation;

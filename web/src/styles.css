@@ -37,7 +37,8 @@ h3 { font-size: 13px; margin: 0 0 8px; font-weight: 700; }
 #livePill.on { color: var(--green); }
 #livePill.on .dot { background: var(--green); box-shadow: 0 0 0 4px rgba(0, 134, 90, 0.15); }
 
-.shell { display: flex; align-items: stretch; max-width: 1280px; margin: 0 auto; width: 100%; }
+.shell { display: flex; align-items: stretch; width: 100%; }
+.main > .content, .main > .wrap { max-width: 1180px; margin: 0 auto; width: 100%; }
 .sidebar { width: 228px; flex: 0 0 228px; background: #fff; border-right: 1px solid var(--border);
            display: flex; flex-direction: column; padding: 16px 10px;
            min-height: calc(100vh - 60px); position: sticky; top: 60px; }
@@ -70,7 +71,7 @@ input, select { width: 100%; border: 1px solid #c8cdd6; border-radius: 8px; padd
                 font-size: 14px; font-family: inherit; color: var(--text); background: #fff; }
 input:focus, select:focus { outline: 2px solid rgba(0, 112, 224, 0.35); border-color: var(--blue); }
 button { background: var(--blue); border: 0; color: #fff; font-weight: 600; border-radius: 19px;
-         padding: 9px 18px; cursor: pointer; font-size: 13.5px; font-family: inherit; }
+         padding: 9px 18px; cursor: pointer; font-size: 13.5px; font-family: inherit; white-space: nowrap; }
 button:hover { background: #005cb9; }
 button:disabled { opacity: 0.55; cursor: default; }
 button.ghost { background: #fff; border: 1px solid #c8cdd6; color: var(--text); font-weight: 600; }
@@ -150,6 +151,8 @@ button.stop:hover { background: #fdeae6; }
 .summary .k { font-size: 10.5px; font-weight: 800; letter-spacing: 0.8px; color: var(--muted); text-transform: uppercase; }
 .summary .big { font-size: 20px; font-weight: 800; }
 
+/* PayPal Buttons: human-sized and centered, not a full-width slab */
+.pp-zone { max-width: 340px; margin: 0 auto; }
 /* TaskBoard rich cards */
 .tb-title { font-weight: 700; font-size: 13.5px; line-height: 1.3; margin-bottom: 3px; word-break: break-word; text-transform: capitalize; }
 .tb-id { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; }
