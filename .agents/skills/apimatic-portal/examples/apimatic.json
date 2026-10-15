@@ -1,0 +1,45 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/@apimatic/cli@beta/apimatic.schema.json",
+  "schemaVersion": 1,
+  "portal": {
+    "site": {
+      "name": "Acme Payments",
+      "url": "https://docs.acme.com",
+      "description": "Accept payments and manage payouts with the Acme API."
+    },
+    "brand": {
+      "logo": {
+        "light": "static/images/logo-light.png",
+        "dark": "static/images/logo-dark.png"
+      },
+      "favicon": "static/images/favicon.png",
+      "colors": {
+        "primary": { "light": "#1d4ed8", "dark": "#60a5fa" }
+      },
+      "colorMode": "both"
+    },
+    "navigation": {
+      "links": [
+        { "label": "Dashboard", "url": "https://dashboard.acme.com" },
+        { "label": "Changelog", "url": "/changelog" }
+      ]
+    },
+    "ai": {
+      "pageActions": true
+    }
+  },
+  "plugin": {
+    "pluginId": "acme-payments",
+    "pluginName": "Acme Payments",
+    "pluginVersion": "0.1.0",
+    "author": { "name": "Acme", "email": "devrel@acme.com" },
+    "license": "MIT",
+    "homepage": "https://docs.acme.com",
+    "repository": "https://github.com/acme/acme-plugin"
+  },
+  "languages": {
+    "typescript": {},
+    "python": {},
+    "csharp": {}
+  }
+}
