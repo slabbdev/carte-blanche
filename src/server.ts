@@ -371,10 +371,21 @@ app.post("/api/webhooks/paypal", async (req, res) => {
   const event = req.body as {
     id?: string;
     event_type?: string;
-    resource?: { id?: string; custom_id?: string; amount?: { value?: string; currency_code?: string } };
+    resource?: {
+      id?: string;
+      custom_id?: string;
+      amount?: { value?: string; currency_code?: string };
+      // dispute resources (CUSTOMER.DISPUTE.*)
+      dispute_id?: string;
+      status?: string;
+      reason?: string;
+      dispute_life_cycle_stage?: string;
+      disputed_transaction?: { seller_transaction_id?: string };
+    };
   } | undefined;
   if (!event?.event_type) return res.status(400).json({ error: "not a PayPal webhook event" });
 
+  const isDispute = event.event_type.startsWith("CUSTOMER.DISPUTE");
   const customId = event.resource?.custom_id ?? "";
   const markerMatch = /^cb\|agent=([^|]+)\|mandate=([^|]+)/.exec(customId);
   let verified = false;
@@ -397,6 +408,13 @@ app.post("/api/webhooks/paypal", async (req, res) => {
     amount: event.resource?.amount ?? null,
     custom_id: customId.slice(0, 200) || null,
     ...(markerMatch ? { agent: markerMatch[1], mandate_id: markerMatch[2] } : {}),
+    ...(isDispute ? {
+      dispute_id: event.resource?.dispute_id ?? event.resource?.id ?? "",
+      dispute_status: event.resource?.status ?? "",
+      dispute_reason: event.resource?.reason ?? "",
+      dispute_stage: event.resource?.dispute_life_cycle_stage ?? "",
+      seller_transaction_id: event.resource?.disputed_transaction?.seller_transaction_id ?? "",
+    } : {}),
     verified,
     verification: webhookId ? "paypal verify-webhook-signature" : "skipped (PAYPAL_WEBHOOK_ID not set)",
   });
