@@ -210,6 +210,30 @@ the sync script by their platform team.
 
 ---
 
+## The economics of the arbitration pipeline (why the seller is the customer)
+
+*The seller is the party bleeding in agentic commerce — not because agent purchases dispute more
+often, but because when they do, the pipeline itself is the cost. This is the quantified case.*
+
+**The pipeline, post by post** (numbers from PayPal's own published pages, marked where estimated):
+
+| Cost post | Today's reality | What the evidence layer does to it |
+|---|---|---|
+| **Evidence assembly** | hours per case: screenshots, emails, tracking PDFs, copy-paste into the Resolution Center (est. 1–3 h per dispute for a small seller) | the pack is **pre-assembled and pre-signed** since the purchase — mandate signature, chain proof, refusals, coverage vs the required slots; assembly becomes **one click** (`Submit evidence`) |
+| **Dispute fees** | **$15 standard / $30 high-volume** per case (PayPal's dispute fee schedule) | settling inside the INQUIRY window via the fast lane (**refund now**) ends the case before escalation — the fee never lands; the pack's `REFUND_FIRST` recommendation fires exactly when the case is unwinnable |
+| **Fight-vs-refund dilemma** | decided on gut under deadline pressure | decided by **coverage**: PayPal's own reason → evidence matrix scored against provable facts (`FIGHT` when the signed mandate fills the authorization slot, `REFUND_FIRST` when PROOF_OF_FULFILLMENT cannot be filled) |
+| **"My agent didn't order this"** (UNAUTHORISED) | **unfalsifiable** for the seller today — no counter-evidence exists, the chargeback is lost by default + fee | the signed spending mandate **falsifies it cryptographically**: the account holder's own signature authorizes the exact amount, payee and window — and enforcement proof (signed refusals) shows the walls were live |
+| **Dispute rate** | feeds PayPal's merchant monitoring thresholds | early settlements + won cases keep the rate down; every avoided escalation is rate protected |
+| **Recurring billing disputes** (CANCELED_RECURRING_BILLING) | PayPal asks for the **subscription agreement** — most sellers dig it out of ToS PDFs | the **signed recurring mandate IS the agreement**: cadence, per-window budget, payees — in the buyer's own signature |
+| **The pre-dispute window** | PayPal's pre-chargeback alerts give a ~20 h refund window to avoid fees — **but only in the Resolution Center: there is NO webhook and NO API event for it** (verified 2026-10-15: `PRE_DISPUTE_ACTIVITY` absent from `webhooks-event-types` and from the official event-names list) | gap #3 in PayPal's agentic surfaces (after the wall-less MCP and the enforcement-free AI-Toolkit). The earliest machine-readable signal today is `CUSTOMER.DISPUTE.CREATED` — our cockpit answers with instant stage playbook + fast lane. **The ask to PayPal: expose pre-dispute alerts as a webhook** — the seller-side API would close the loop end-to-end |
+
+**Net shape:** for an agent-mediated sale, the mandate is signed at purchase time — so the seller
+walks into any dispute with the evidence already assembled, a coverage score telling them whether
+to fight, and a one-click settle that keeps the fee off the books. The arbitration pipeline stops
+being a tax on every case and becomes a decision priced in seconds.
+
+---
+
 ## The thread tying it together
 
 Every proposal above is the same move: **we used the sponsor's product where it bites — prices in

@@ -94,15 +94,19 @@ describe("buildEvidencePack", () => {
     expect(toMarkdown(pack)).toMatch(/\*\*none on file\*\*/);
   });
 
-  it("shapes provide-evidence entries for the PayPal endpoint", async () => {
+  it("shapes provide-evidence entries for the PayPal endpoint (matrix-targeted slots)", async () => {
     const { w, service } = await worldWithPurchases();
     const d = await service.get("MOCK-D-001");
     const pack = buildEvidencePack(d!, { enforcer: w.enforcer, journal: w.journal, store: w.store });
     const entries = toProvideEvidenceEntries(pack);
-    expect(entries.length).toBe(2);
-    expect(entries[0].evidence_type).toBe("PROOF_OF_TRANSACTION");
-    expect(String(entries[0].notes)).toContain("MOCK-D-001");
-    expect(entries[1].evidence_type).toBe("PROOF_OF_PERMISSION");
+    // without fulfillment or refund facts, only the OTHER slot is claimed —
+    // PayPal's guidance asks for PROOF_OF_FULFILLMENT / PROOF_OF_REFUND / OTHER,
+    // never PROOF_OF_TRANSACTION or PROOF_OF_PERMISSION
+    expect(entries.length).toBe(1);
+    expect(entries[0].evidence_type).toBe("OTHER");
+    const notes = String(entries[0].notes);
+    expect(notes).toContain("MOCK-D-001");
+    expect(notes).toContain("mandate"); // the authorization proof travels in the notes
   });
 });
 

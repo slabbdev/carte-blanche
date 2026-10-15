@@ -224,6 +224,17 @@ export class Journal {
     );
   }
 
+  /** Events of one type, optionally narrowed by a data predicate. */
+  eventsOfType(type: string, extra?: (data: Record<string, unknown>) => boolean): JournalEvent[] {
+    return this.events.filter(
+      (e) =>
+        e.type === type &&
+        e.data !== null &&
+        typeof e.data === "object" &&
+        (!extra || extra(e.data as Record<string, unknown>)),
+    );
+  }
+
   /** Cumulative captured spend (minor units) for a mandate, from the chain itself. */
   capturedMinorFor(mandateId: string): bigint;
   /**

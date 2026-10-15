@@ -17,7 +17,7 @@ import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from 
 import { PreferenceStore } from "./agent/preferences.js";
 import { TrackRecordService } from "./agent/trackrecord.js";
 import { configureAutopilot, runAutopilot, autopilotAvailable } from "./agent/autopilot.js";
-import { buildEvidencePack, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
+import { buildEvidencePack, fulfillmentFor, toMarkdown, toProvideEvidenceEntries } from "./disputes/evidence.js";
 import { Channel3Catalog } from "./catalog/channel3.js";
 
 import { loadEnvFile } from "./lib/env.js";
@@ -806,7 +806,100 @@ app.get("/api/disputes/:id/evidence-pack", async (req, res) => {
   const d = await disputes.get(req.params.id).catch(() => undefined);
   if (!d) return res.status(404).json({ error: "dispute not found" });
   const pack = buildEvidencePack(d, { enforcer, journal, store, keys });
-  res.json({ pack, markdown: toMarkdown(pack) });
+  res.json({ pack, markdown: toMarkdown(pack), entries: toProvideEvidenceEntries(pack) });
+});
+
+// The fulfillment slot: carrier + tracking for an order, journalled (tamper-
+// evident) and shaped for PayPal's PROOF_OF_FULFILLMENT tracking_info. The
+// merchant's fulfillment system posts here; every dispute on that order gains
+// the slot automatically at pack-generation time.
+app.post("/api/orders/:orderId/fulfillment", (req, res) => {
+  const body = (req.body ?? {}) as { carrier?: string; tracking_number?: string; shipped_at?: string };
+  const carrier = String(body.carrier ?? "").trim().slice(0, 80);
+  const tracking = String(body.tracking_number ?? "").trim().slice(0, 80);
+  if (!carrier || !tracking) {
+    return res.status(400).json({ error: "carrier and tracking_number are required" });
+  }
+  const shippedAt = body.shipped_at ? new Date(body.shipped_at).toISOString() : new Date().toISOString();
+  const event = journal.append("order_fulfilled", {
+    order_id: req.params.orderId,
+    carrier,
+    tracking_number: tracking,
+    shipped_at: shippedAt,
+    source: "merchant fulfillment",
+  });
+  res.status(201).json({
+    ok: true,
+    journaled: { seq: event.seq, event_hash: event.hash, ts: event.ts },
+    order_id: req.params.orderId,
+    evidence_slot: "PROOF_OF_FULFILLMENT",
+    note: "every evidence pack for a dispute on this order now covers the fulfillment slot",
+  });
+});
+
+app.get("/api/orders/:orderId/fulfillment", (req, res) => {
+  const f = fulfillmentFor(journal, req.params.orderId);
+  if (!f) return res.status(404).json({ error: "no fulfillment record for this order" });
+  res.json(f);
+});
+
+// The fast lane: settle-or-fight, answered by coverage. `refund` issues a real
+// PayPal refund on the captured payment (inside the inquiry window: no
+// chargeback escalation, no $15–30 dispute fee) and journals it; `fight`
+// returns the evidence pack's targeted entries ready for provide-evidence.
+app.post("/api/disputes/:id/fast-lane", async (req, res) => {
+  const d = await disputes.get(req.params.id).catch(() => undefined);
+  if (!d) return res.status(404).json({ error: "dispute not found" });
+  const action = (req.body as { action?: string } | undefined)?.action;
+  if (action !== "refund" && action !== "fight") {
+    return res.status(400).json({ error: 'action must be "refund" or "fight"' });
+  }
+  const pack = buildEvidencePack(d, { enforcer, journal, store, keys });
+
+  if (action === "fight") {
+    journal.append("dispute_fastlane_decision", { dispute_id: d.disputeId, action: "fight", recommendation: pack.recommendation.action });
+    return res.json({
+      action: "fight",
+      recommendation: pack.recommendation,
+      coverage: pack.coverage,
+      entries: toProvideEvidenceEntries(pack),
+      submit: `POST /api/disputes/${d.disputeId}/submit-evidence`,
+    });
+  }
+
+  if (rails.mode === "mock") {
+    return res.status(409).json({ error: "mock rails: refunding is a PayPal-side operation — the recommendation itself is real", recommendation: pack.recommendation });
+  }
+  if (!paypal) return res.status(502).json({ error: "PayPal client unavailable" });
+  const captureId = pack.linkedPurchase?.receipt.captureId ?? d.disputedTransactions?.[0]?.transaction_id;
+  if (!captureId) return res.status(409).json({ error: "no capture id found for this dispute — cannot refund" });
+  const refund = await paypal.refundCapture({
+    captureId,
+    amount: d.amount,
+    currency: d.currency,
+    note: `carte-blanche fast lane: settled dispute ${d.disputeId} inside the inquiry window`,
+    requestId: `cb-fastlane-${d.disputeId}`.slice(0, 64),
+  });
+  const refundId = (refund.data as { id?: string } | undefined)?.id ?? "";
+  const event = journal.append("dispute_fastlane_refund", {
+    dispute_id: d.disputeId,
+    capture_id: captureId,
+    ...(refundId ? { refund_id: refundId } : {}),
+    amount: d.amount,
+    currency: d.currency,
+    paypal_status: refund.status,
+    reason: "settled inside the inquiry window — no chargeback escalation, no dispute fee",
+  });
+  res.json({
+    action: "refund",
+    ok: refund.ok,
+    refundId,
+    paypal_status: refund.status,
+    journaled: { seq: event.seq, event_hash: event.hash },
+    note: refund.ok
+      ? "refund issued — the inquiry settles without escalation and the dispute fee never lands"
+      : "refund rejected by PayPal — details in paypal_status",
+  });
 });
 
 app.post("/api/disputes/:id/submit-evidence", async (req, res) => {

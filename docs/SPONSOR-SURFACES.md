@@ -14,6 +14,10 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Payee routing + `custom_id` metadata (sandbox constraint worked around) | ✅ | adapter (`payeeAsMetadata`) |
 | **Agent-purchase labeling** (`custom_id = "cb\|agent=…\|mandate=…"`) | ✅ | enforcer, `npm run tx:label-proof` |
 | Disputes v1 (list/get, `provide-evidence`, `send-evidence`, SAMPLE disputes) | ✅ | `src/disputes/`, `/dashboard` |
+| **Reason → evidence matrix** (their own guidance page) | ✅ **implemented** | `src/disputes/coverage.ts` — every pack scores covered/missing vs the slots PayPal actually asks for (PROOF_OF_FULFILLMENT / PROOF_OF_REFUND / OTHER) and emits a FIGHT vs REFUND_FIRST recommendation; entries now target those slots only (tracking_info structured) |
+| **Fast lane** (settle inside the INQUIRY window) | ✅ | `POST /api/disputes/:id/fast-lane` — real `POST /v2/payments/captures/{id}/refund` (no chargeback escalation, $15–30 fee avoided) or the pack's targeted entries for the fight |
+| **Pre-dispute alerts — API GAP FOUND** (their pre-chargeback alert gives sellers a ~20 h fee-avoidance window, but only in the Resolution Center) | ⚠️ **no webhook, no API event exists** (verified 2026-10-15: absent from `webhooks-event-types` AND from the official event-names list — `PATCH` with `PRE_DISPUTE_ACTIVITY` 400s) | gap #3 in their agentic surfaces; documented as the ask in SPONSOR-PROPOSALS economics section. `RISK.DISPUTE.CREATED` exists but is deprecated (superseded by `CUSTOMER.DISPUTE.CREATED`, which we already subscribe) |
+| Fulfillment slot (`tracking_info` structured for `PROOF_OF_FULFILLMENT`) | ✅ | `POST /api/orders/:orderId/fulfillment` — journalled, every pack on that order gains the slot |
 | Transaction Search (`custom_field` = our agent marker, PayPal-side detection) | ✅ | `npm run tx:label-proof` |
 | Webhooks (+ signature verification via `verify-webhook-signature`) | ✅ | `POST /api/webhooks/paypal` (`PAYPAL_WEBHOOK_ID` to activate verification) |
 | Their official MCP server (`@paypal/mcp`) | ✅ analyzed | the gap-proof: money-moving tools, zero walls — pairs with ours |

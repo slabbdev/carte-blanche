@@ -177,6 +177,23 @@
       <div class="drawer" id="drawer">
         <h2 id="d-title">—</h2>
         <div class="kv" id="d-kv"></div>
+
+        <div id="defense" style="display:none;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:12px 0;background:#fafbfd">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <b style="font-size:13.5px">Defense recommendation</b>
+            <span class="pill mock" id="rec-pill">—</span>
+            <span style="flex:1"></span>
+            <span class="pill mock" id="cov-pill" title="required evidence slots covered, per PayPal's reason → evidence matrix">coverage —</span>
+          </div>
+          <div class="muted" id="rec-why" style="font-size:12.5px;margin-top:6px"></div>
+          <div id="cov-slots" style="font-size:12.5px;margin-top:8px"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+            <button class="stop" id="fastlane-refund" style="padding:6px 14px;font-size:12.5px">Refund now — settle, no chargeback fee</button>
+            <button class="ghost" id="fastlane-fight" style="padding:6px 14px;font-size:12.5px">Fight with the pack →</button>
+            <span class="muted" id="fastlane-hint" style="font-size:12px"></span>
+          </div>
+        </div>
+
         <div class="tabs">
           <button id="tab-md" class="active">Evidence pack (markdown)</button>
           <button id="tab-json">Raw JSON</button>
@@ -241,6 +258,9 @@ const gridOptions = {
     { field: "disputeId", headerName: "Dispute", minWidth: 140,
       cellRenderer: (p) => '<span class="mono">' + esc(p.value) + "</span>" },
     { field: "status", headerName: "Status", minWidth: 170, cellRenderer: (p) => statusPill(p.value) },
+    { field: "stage", headerName: "Stage", minWidth: 140,
+      cellRenderer: (p) => p.value ? stagePill(p.value) : '<span class="pill mock">—</span>',
+      valueFormatter: (p) => String(p.value ?? "").replaceAll("_", " ") },
     { field: "reason", headerName: "Reason", minWidth: 200,
       valueFormatter: (p) => String(p.value ?? "").replaceAll("_", " ") },
     { headerName: "Amount", minWidth: 110,
@@ -335,11 +355,27 @@ function pulseLive() {
 }
 
 // --- dispute detail drawer + evidence pack ----------------------------------
+const STAGE_PLAYBOOK = {
+  INQUIRY: "Buyer case inside PayPal's Resolution Center — resolve HERE: up to ~20 days, no chargeback fee, direct contact possible. Every case that escalates costs $15–30 and hits your dispute rate.",
+  CHARGEBACK: "The bank is now in the loop — network deadlines are shorter and the dispute fee applies. Submit compelling evidence NOW; the pack below is already targeted at PayPal's required slots.",
+  PRE_ARBITRATION: "Post-adjudication appeal window — escalate only with NEW evidence (e.g. the signed mandate's chain proof). Otherwise the adjudicated outcome stands.",
+};
+const stagePill = (stage) => {
+  const s = String(stage || "").toUpperCase();
+  if (s === "INQUIRY") return '<span class="pill won">INQUIRY</span>';
+  if (s === "CHARGEBACK") return '<span class="pill dead">CHARGEBACK</span>';
+  if (s === "PRE_ARBITRATION") return '<span class="pill open">PRE-ARBITRATION</span>';
+  return "";
+};
+
 async function selectDispute(d) {
   CURRENT = d;
   const left = daysLeft(d.respondBy);
+  const playbook = STAGE_PLAYBOOK[String(d.stage || "").toUpperCase()];
   const kv = [
     ["Status", statusPill(d.status)],
+    ...(d.stage ? [["Stage", stagePill(d.stage)]] : []),
+    ...(playbook ? [["Playbook", '<span class="muted" style="font-size:12.5px">' + playbook + "</span>"]] : []),
     ["Reason", esc(String(d.reason || "").replaceAll("_", " "))],
     ["Amount", esc((d.amount ?? "—") + " " + (d.currency ?? ""))],
     ["Opened", esc(d.openedAt ? new Date(d.openedAt).toLocaleString() : "—")],
@@ -352,15 +388,37 @@ async function selectDispute(d) {
   $("d-title").textContent = d.disputeId;
   $("d-kv").innerHTML = kv.map(([k, v]) => '<span class="k">' + k + "</span><span>" + v + "</span>").join("");
   $("d-hint").textContent = "";
+  $("defense").style.display = "none";
   PACK = null;
   $("d-pack").textContent = "loading evidence pack…";
   try {
     PACK = await api("/api/disputes/" + encodeURIComponent(d.disputeId) + "/evidence-pack");
     renderPack();
+    renderDefense();
   } catch (e) {
     $("d-pack").textContent = "evidence pack unavailable: " + e.message;
   }
   $("drawer").classList.add("show");
+}
+
+function renderDefense() {
+  const p = PACK?.pack;
+  if (!p?.coverage) return;
+  $("defense").style.display = "";
+  const rec = p.recommendation;
+  const rp = $("rec-pill");
+  rp.textContent = rec.action === "FIGHT" ? "⚔ FIGHT" : rec.action === "REFUND_FIRST" ? "REFUND FIRST" : "SETTLE (either way wins)";
+  rp.className = "pill " + (rec.action === "FIGHT" ? "won" : rec.action === "REFUND_FIRST" ? "dead" : "open");
+  $("rec-why").textContent = rec.because;
+  $("cov-pill").textContent = "coverage " + p.coverage.covered + "/" + p.coverage.total;
+  $("cov-pill").className = "pill " + (p.coverage.covered === p.coverage.total ? "won" : "open");
+  $("cov-slots").innerHTML = p.coverage.slots.map((s) =>
+    '<div style="padding:2px 0">' + (s.status === "covered" ? '<span class="pill won">✓</span>' : '<span class="pill dead">✗</span>') +
+    " <b>" + esc(s.evidenceType) + "</b> — " + esc(s.expects) +
+    (s.how ? ' <span class="muted">(' + esc(s.how) + ")</span>" : "") + "</div>"
+  ).join("");
+  // the recommendation pre-selects the emphasis, the human still decides
+  $("fastlane-hint").textContent = "settle inside the INQUIRY window: no chargeback escalation, no $15–30 fee, dispute rate intact";
 }
 
 function renderPack() {
@@ -393,6 +451,33 @@ $("submit").onclick = async () => {
     $("d-hint").textContent = "✗ " + e.message;
   }
   $("submit").disabled = false;
+};
+
+$("fastlane-fight").onclick = async () => {
+  if (!CURRENT) return;
+  $("fastlane-hint").textContent = "preparing the pack…";
+  try {
+    const r = await api("/api/disputes/" + encodeURIComponent(CURRENT.disputeId) + "/fast-lane", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fight" }),
+    });
+    $("fastlane-hint").textContent = "✓ entries targeted at PayPal's required slots — press Submit evidence to send";
+  } catch (e) {
+    $("fastlane-hint").textContent = "✗ " + e.message;
+  }
+};
+
+$("fastlane-refund").onclick = async () => {
+  if (!CURRENT) return;
+  if (!confirm("Refund " + (CURRENT.amount ?? "?") + " " + (CURRENT.currency ?? "") + " on " + CURRENT.disputeId + "? The case settles inside the inquiry window — no chargeback escalation, no dispute fee.")) return;
+  $("fastlane-hint").textContent = "refunding…";
+  try {
+    const r = await api("/api/disputes/" + encodeURIComponent(CURRENT.disputeId) + "/fast-lane", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "refund" }),
+    });
+    $("fastlane-hint").textContent = r.ok ? "✓ refunded " + (r.refundId || "") + " — journalled at seq " + r.journaled?.seq : "✗ " + (r.error || r.note || "refund failed");
+  } catch (e) {
+    $("fastlane-hint").textContent = "✗ " + e.message;
+  }
 };
 
 // --- toolbar -----------------------------------------------------------------

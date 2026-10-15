@@ -12,6 +12,8 @@ export interface DisputeView {
   disputeId: string;
   reason: string;
   status: string;
+  /** dispute_life_cycle_stage — INQUIRY | CHARGEBACK | PRE_ARBITRATION. */
+  stage?: string;
   amount?: string;
   currency?: string;
   openedAt?: string;
@@ -104,6 +106,7 @@ export class DisputeService {
       disputeId: String(item.dispute_id ?? "unknown"),
       reason: String(item.reason ?? "unknown"),
       status: String(item.status ?? "unknown"),
+      stage: typeof item.dispute_life_cycle_stage === "string" ? item.dispute_life_cycle_stage : undefined,
       openedAt,
       respondBy: openedAt ? plusDays(openedAt, SELLER_WINDOW_DAYS) : undefined,
       source: "paypal",
@@ -135,11 +138,13 @@ export class DisputeService {
       status: string,
       openedAt: string,
       receipt?: Receipt,
+      stage?: string,
     ): DisputeView => {
       const d: DisputeView = {
         disputeId: id,
         reason,
         status,
+        ...(stage ? { stage } : {}),
         amount: receipt?.amount ?? "0.00",
         currency: receipt?.currency ?? "USD",
         openedAt,
@@ -155,10 +160,10 @@ export class DisputeService {
     };
 
     const [r1, r2] = receipts;
-    if (r1) rows.push(mk("MOCK-D-001", "ITEM_NOT_RECEIVED", "OPEN", new Date(now - 6 * 86_400_000).toISOString(), r1));
-    if (r2) rows.push(mk("MOCK-D-002", "UNAUTHORIZED_TRANSACTION", "UNDER_REVIEW", new Date(now - 2 * 86_400_000).toISOString(), r2));
+    if (r1) rows.push(mk("MOCK-D-001", "ITEM_NOT_RECEIVED", "OPEN", new Date(now - 6 * 86_400_000).toISOString(), r1, "INQUIRY"));
+    if (r2) rows.push(mk("MOCK-D-002", "UNAUTHORIZED_TRANSACTION", "UNDER_REVIEW", new Date(now - 2 * 86_400_000).toISOString(), r2, "CHARGEBACK"));
     if (rows.length === 0) {
-      rows.push(mk("MOCK-D-000", "ITEM_NOT_RECEIVED", "OPEN", new Date(now - 6 * 86_400_000).toISOString()));
+      rows.push(mk("MOCK-D-000", "ITEM_NOT_RECEIVED", "OPEN", new Date(now - 6 * 86_400_000).toISOString(), undefined, "INQUIRY"));
     }
     // Refusal counts are per-mandate (the pack's §4 must agree with the row).
     for (const d of rows) {

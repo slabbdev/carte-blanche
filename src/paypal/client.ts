@@ -137,6 +137,27 @@ export class PayPalClient {
     return this.request<OrderBody>("GET", `/v2/checkout/orders/${encodeURIComponent(orderId)}`, undefined, undefined);
   }
 
+  /**
+   * Refund a captured payment (Payments v2). The fast lane of the dispute
+   * cockpit: settling inside the inquiry window avoids escalation to a
+   * chargeback (the $15–30 dispute fee) and protects the dispute rate —
+   * cheaper than fighting a case you cannot evidence.
+   */
+  async refundCapture(args: {
+    captureId: string;
+    amount?: string;
+    currency?: string;
+    note?: string;
+    requestId: string;
+  }): Promise<PayPalResponse<{ id?: string; status?: string }>> {
+    const body: Record<string, unknown> = {};
+    if (args.amount && args.currency) {
+      body.amount = { value: args.amount, currency_code: args.currency };
+    }
+    if (args.note) body.note = args.note.slice(0, 255);
+    return this.request("POST", `/v2/payments/captures/${encodeURIComponent(args.captureId)}/refund`, body, args.requestId);
+  }
+
   async listDisputes(): Promise<PayPalResponse<{ links?: unknown[]; items?: Array<{ dispute_id: string; status: string; reason: string }> }>> {
     return this.request("GET", "/v1/customer/disputes", undefined, undefined);
   }

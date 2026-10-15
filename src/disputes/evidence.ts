@@ -1,4 +1,3 @@
-import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex } from "../lib/sign.js";
 import type { Keys } from "../lib/keys.js";
 import type { Enforcer } from "../enforcer/enforcer.js";
@@ -7,6 +6,7 @@ import type { MandateStore } from "../mandate/store.js";
 import type { FullReceipt, Receipt } from "../receipts/receipts.js";
 import { newReceiptId, signReceipt } from "../receipts/receipts.js";
 import { denialsForMandate, type DisputeView } from "./service.js";
+import { coverageFor, recommendDefense, type Coverage, type DefenseRecommendation } from "./coverage.js";
 
 /**
  * The evidence pack: the artifact this whole project exists for. When a
@@ -44,6 +44,12 @@ export interface EvidencePack {
   enforcement: {
     signedRefusals: Array<{ denialId: string; reasonCode: string; createdAt: string }>;
   };
+  /** Which of PayPal's required evidence slots this pack fills — and what's missing. */
+  coverage: Coverage;
+  /** The fight-vs-refund call, answered by coverage. */
+  recommendation: DefenseRecommendation;
+  fulfillment?: { carrier: string; trackingNumber: string; shippedAt: string; seq: number };
+  refund?: { refundId: string; captureId: string; seq: number };
   pending: string[];
 }
 
@@ -66,7 +72,7 @@ function journalLinkedPurchase(
     .map((t) => t.transaction_id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   if (ids.length === 0) return undefined;
-  for (const event of deps.journal.eventsFor((d) => d.type === "order_captured")) {
+  for (const event of deps.journal.eventsOfType("order_captured")) {
     const d = event.data as Record<string, unknown>;
     const orderId = typeof d.order_id === "string" ? d.order_id : "";
     const captureId = typeof d.capture_id === "string" ? d.capture_id : "";
@@ -115,6 +121,43 @@ function journalLinkedPurchase(
   return undefined;
 }
 
+/**
+ * Journalled fulfillment record for an order (latest wins) — the raw material
+ * PayPal's PROOF_OF_FULFILLMENT slot wants: carrier + tracking number.
+ */
+export function fulfillmentFor(
+  journal: Journal,
+  orderId: string | undefined,
+): EvidencePack["fulfillment"] {
+  if (!orderId) return undefined;
+  let found: EvidencePack["fulfillment"];
+  for (const event of journal.eventsOfType("order_fulfilled", (d) => d.order_id === orderId)) {
+    const d = event.data as Record<string, unknown>;
+    found = {
+      carrier: String(d.carrier ?? ""),
+      trackingNumber: String(d.tracking_number ?? ""),
+      shippedAt: typeof d.shipped_at === "string" ? d.shipped_at : event.ts,
+      seq: event.seq,
+    };
+  }
+  return found;
+}
+
+/** Journalled fast-lane refund for a capture (latest wins). */
+function refundFor(journal: Journal, captureId: string | undefined): EvidencePack["refund"] {
+  if (!captureId) return undefined;
+  let found: EvidencePack["refund"];
+  for (const event of journal.eventsOfType("dispute_fastlane_refund", (d) => d.capture_id === captureId)) {
+    const d = event.data as Record<string, unknown>;
+    found = {
+      refundId: String(d.refund_id ?? ""),
+      captureId,
+      seq: event.seq,
+    };
+  }
+  return found;
+}
+
 export function buildEvidencePack(
   dispute: DisputeView,
   deps: { enforcer: Enforcer; journal: Journal; store: MandateStore; keys: Keys },
@@ -131,9 +174,24 @@ export function buildEvidencePack(
   }
   const denials = denialsForMandate(enforcer, receipt);
 
+  // coverage + defense recommendation, from facts the journal can prove
+  const captureId = receipt?.captureId ?? dispute.disputedTransactions?.[0]?.transaction_id;
+  const fulfillment = fulfillmentFor(journal, receipt?.orderId);
+  const refund = refundFor(journal, captureId);
+  const facts = {
+    hasLinkedReceipt: Boolean(full),
+    isRecurringMandate: Boolean(full?.mandate.limits.recurrence),
+    hasFulfillment: Boolean(fulfillment),
+    ...(refund?.refundId ? { refundId: refund.refundId } : {}),
+  };
+  const coverage = coverageFor(dispute.reason, facts);
+  const recommendation = recommendDefense(dispute.reason, facts);
+
   const pending: string[] = [];
   if (!receipt) pending.push("no linked purchase on file — run the console demo so the dispute can be tied to a receipt");
-  if (receipt) pending.push("classic fulfillment evidence (tracking, correspondence) not yet attached — S3 milestone, not claimed here");
+  if (receipt && !fulfillment) {
+    pending.push("fulfillment evidence not yet attached — POST /api/orders/:orderId/fulfillment (carrier + tracking) fills the PROOF_OF_FULFILLMENT slot");
+  }
 
   const pack: EvidencePack = {
     packId: packFileId(dispute.disputeId),
@@ -153,6 +211,10 @@ export function buildEvidencePack(
     enforcement: {
       signedRefusals: denials.map((d) => ({ denialId: d.denialId, reasonCode: d.reasonCode, createdAt: d.createdAt })),
     },
+    coverage,
+    recommendation,
+    ...(fulfillment ? { fulfillment } : {}),
+    ...(refund ? { refund } : {}),
     pending,
   };
 
@@ -215,6 +277,15 @@ export function toMarkdown(pack: EvidencePack): string {
     lines.push("");
   }
 
+  const rec = pack.recommendation;
+  lines.push(`## 5. Defense recommendation: **${rec.action}**`);
+  lines.push(`- ${rec.because}`);
+  lines.push(`- Evidence coverage vs PayPal's matrix for reason \`${pack.coverage.reason}\`: **${pack.coverage.covered}/${pack.coverage.total} required slots covered**`);
+  for (const s of pack.coverage.slots) {
+    lines.push(`  - ${s.status === "covered" ? "✓" : "✗"} \`${s.evidenceType}\` — ${s.expects}${s.how ? ` (${s.how})` : ""}`);
+  }
+  lines.push("");
+
   if (pack.pending.length > 0) {
     lines.push("## Pending (honestly)");
     for (const p of pack.pending) lines.push(`- ${p}`);
@@ -232,24 +303,45 @@ export function toMarkdown(pack: EvidencePack): string {
   return lines.join("\n");
 }
 
-/** Evidence entries shaped for PayPal's provide-evidence endpoint (notes-based; files are an account-manager scope). */
+/**
+ * Evidence entries shaped for PayPal's provide-evidence endpoint — targeted at
+ * the slots PayPal's OWN guidance asks for (developer.paypal.com/disputes/
+ * reasons-evidence): OTHER (notes/documents), PROOF_OF_FULFILLMENT (structured
+ * tracking_info), PROOF_OF_REFUND (refund id). The signed mandate, the chain
+ * proof and the refusals all travel inside the OTHER notes; a refund entry
+ * appears only when a refund was actually issued — claiming a refund slot
+ * without a refund would poison the case.
+ */
 export function toProvideEvidenceEntries(pack: EvidencePack): Array<Record<string, unknown>> {
   const entries: Array<Record<string, unknown>> = [];
-  const lp = pack.linkedPurchase;
-  entries.push({
-    evidence_type: "PROOF_OF_TRANSACTION",
-    notes: toMarkdown(pack),
-  });
-  if (lp) {
+
+  if (pack.fulfillment && pack.coverage.slots.some((s) => s.evidenceType === "PROOF_OF_FULFILLMENT")) {
     entries.push({
-      evidence_type: "PROOF_OF_PERMISSION" as string & { custom?: string },
-      notes: canonicalJson({
-        mandate_id: lp.mandateId,
-        mandate_signature: lp.mandateSignature,
-        receipt_id: lp.receipt.receiptId,
-        chain_tip: pack.chain.tip,
-      }),
+      evidence_type: "PROOF_OF_FULFILLMENT",
+      evidence_info: {
+        tracking_info: [{ carrier_name: pack.fulfillment.carrier, tracking_number: pack.fulfillment.trackingNumber }],
+      },
+      notes: `shipped ${pack.fulfillment.shippedAt} — journalled at seq ${pack.fulfillment.seq} (tamper-evident chain)`,
     });
   }
+
+  if (pack.refund?.refundId) {
+    entries.push({
+      evidence_type: "PROOF_OF_REFUND",
+      evidence_info: { refund_ids: [pack.refund.refundId] },
+      notes: "refund issued and journalled in the tamper-evident chain",
+    });
+  }
+
+  const lp = pack.linkedPurchase;
+  const authProof = lp
+    ? `Authorization proof: mandate ${lp.mandateId} — Ed25519 signature ${lp.mandateSignature.slice(0, 48)}… over the mandate's canonical JSON (immutable, per-transaction and cumulative caps, payee allowlist, window${lp.receipt.payee ? `, payee ${lp.receipt.payee}` : ""}). Signer fingerprint ${sha256Hex(lp.mandatePublicKey).slice(0, 16)}. Enforcer's PayPal order ${lp.receipt.orderId} / capture ${lp.receipt.captureId}, all events seq ${lp.eventSeqs.join(" → ")} in a ${pack.chain.length}-event hash-chained journal (verified at generation, chain tip ${pack.chain.tip}).`
+    : "No signed mandate on file for this transaction.";
+  entries.push({
+    evidence_type: "OTHER",
+    notes: `${toMarkdown(pack)}
+Authorization evidence (this transaction): ${authProof}`,
+  });
+
   return entries;
 }

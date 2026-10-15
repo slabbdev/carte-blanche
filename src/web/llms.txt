@@ -51,7 +51,12 @@ MCP server: `mcp/server.ts` in the repo (`npm run mcp`) — the same API as agen
   budget = basket, cap = basket × periods); run a period with `{"cycle":"2026-11"}` — retries within
   a cycle are idempotent, the next month runs fresh under the same mandate.
 - GET  /api/disputes — buyer disputes with 10-day respond-by deadlines; evidence packs at
-  /api/disputes/:id/evidence-pack.
+  /api/disputes/:id/evidence-pack (each pack carries a coverage score vs PayPal's required
+  evidence slots and a FIGHT / REFUND_FIRST recommendation).
+- POST /api/orders/:orderId/fulfillment — journal {carrier, tracking_number}; fills the
+  PROOF_OF_FULFILLMENT slot in every evidence pack for disputes on that order.
+- POST /api/disputes/:id/fast-lane {"action":"refund"|"fight"} — settle inside the inquiry
+  window (real PayPal refund, no chargeback fee) or get the pack's targeted evidence entries.
 - POST /api/receipts/:id/dispute-request — the BUYER's contestation: seals the dispute intent
   (reason, receipt, order id) into the journal the moment it forms, so the buyer enters PayPal's
   flow carrying signed evidence, not screenshots.
