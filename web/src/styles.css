@@ -148,6 +148,19 @@ button.stop:hover { background: #fdeae6; }
 .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
 .chart { background: #fafbfd; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.md-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 1000px) { .md-split { grid-template-columns: 1fr; } }
+.md-split .pack { max-height: 420px; margin: 0; }
+.md-split .md-body { background: #fff !important; color: var(--text); border: 1px solid var(--border); }
+.md-split .md-body h2, .md-split .md-body h3, .md-split .md-body h4 { margin: 14px 0 6px; font-size: 13.5px; }
+.md-body h2 { border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.md-split .md-body p { margin: 6px 0; }
+.md-split .md-body ul { margin: 6px 0; padding-left: 18px; }
+.md-split .md-body li { margin: 3px 0; }
+.md-split .md-body li.ind { margin-left: 16px; list-style: circle; }
+.md-split .md-body code { background: #f0f2f6; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-family: var(--mono); font-size: 11.5px; }
+.md-split .md-body hr { border: 0; border-top: 1px dashed var(--border); margin: 12px 0; }
+.md-split .md-body strong { font-weight: 700; }
 .drawer { margin-top: 22px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
 .drawer h2 { font-size: 16px; margin: 0 0 12px; }
 .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 14px; font-size: 13px; align-items: start; }

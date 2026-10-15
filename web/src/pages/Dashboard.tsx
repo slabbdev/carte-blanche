@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 import { api, esc, useScript } from "../api";
+import { mdToHtml } from "../lib/md";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -236,7 +237,7 @@ export default function Dashboard() {
             <span>{current.linkedReceiptId
               ? <a className="mono" href={"/verify/" + encodeURIComponent(current.linkedReceiptId)}>{esc(current.linkedReceiptId)}</a> : "—"}</span>
             <span className="k">Source</span>
-            <span>{current.source === "paypal" ? '<span class="pill paypal">PAYPAL</span>' : '<span class="pill mock">MOCK</span>'}</span>
+            <span>{current.source === "paypal" ? <span className="pill paypal">PAYPAL</span> : <span className="pill mock">MOCK</span>}</span>
           </div>
 
           {rec && (
@@ -277,9 +278,18 @@ export default function Dashboard() {
             <button className="ghost" onClick={() => current && pack && download(current.disputeId + "-evidence.json", JSON.stringify(pack.pack, null, 2), "application/json")}>⬇ .json</button>
             <button onClick={submitEvidence}>Submit evidence</button>
           </div>
-          <pre className="pack">{pack
-            ? (packTab === "md" ? pack.markdown : JSON.stringify(pack.pack, null, 2))
-            : "loading evidence pack…"}</pre>
+          {pack ? (
+            packTab === "md" ? (
+              <div className="md-split">
+                <pre className="pack">{pack.markdown}</pre>
+                <div className="pack md-body" dangerouslySetInnerHTML={{ __html: mdToHtml(pack.markdown) }} />
+              </div>
+            ) : (
+              <pre className="pack">{JSON.stringify(pack.pack, null, 2)}</pre>
+            )
+          ) : (
+            <pre className="pack">loading evidence pack…</pre>
+          )}
           <div className="hint">{dHint}</div>
         </div>
       )}

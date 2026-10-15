@@ -219,16 +219,26 @@ export default function Planner() {
       loadWatch().catch(() => {});
     } catch (e: any) { setHint("✗ " + e.message); }
   }
-  async function reactToDrop(productId: string) {
+  async function reactToDrop(productId: string, dropSeq: string) {
     if (!journey?.mandateId) { setHint("approve the journey first — the re-run needs its mandate"); return; }
     const cycle = cycleRef.current?.value.trim() || new Date().toISOString().slice(0, 7);
-    setHint(`price drop → re-running cycle ${cycle} under the same mandate…`);
+    setHint(`price drop → lines re-priced, re-running cycle ${cycle} under the same mandate…`);
     try {
-      const after = await api<Journey>(`/api/journeys/${encodeURIComponent(journey.id)}/run`, {
-        method: "POST", body: JSON.stringify({ cycle }),
+      const after = await api<any>(`/api/journeys/${encodeURIComponent(journey.id)}/run`, {
+        method: "POST", body: JSON.stringify({ cycle, drop_seq: dropSeq }),
       });
       setJourney(after);
-      setHint("done — walls applied: same mandate, same windows.");
+      const line = after.items.find((i: any) => i.productId === productId);
+      const prot = after.price_protection?.[0];
+      if (prot) {
+        setHint(`💰 PRICE PROTECTION — you already paid the old price, so the drop refunds the difference: ${prot.amount} ${prot.currency}${prot.refundId ? " (PayPal refund " + prot.refundId + ")" : prot.simulated ? " (simulated on mock rails)" : ""}. Journalled, verifiable like everything else.`);
+      } else if (line?.status === "receipt") {
+        setHint(`✓ drop applied — re-purchased at ${line.price} ${after.currency} under the same mandate walls. Re-clicking this same drop buys nothing more (idempotent per drop).`);
+      } else if (line?.status === "refused") {
+        setHint(`✗ the wall held: ${line.detail ?? "refused"}. The line IS re-priced to the drop — give the re-run budget (a standing basket re-arms it every cycle) and run again.`);
+      } else {
+        setHint("done — walls applied: same mandate, same windows.");
+      }
     } catch (e: any) { setHint("✗ " + e.message); }
   }
 
