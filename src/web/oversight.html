@@ -27,6 +27,9 @@
   .account b { color: var(--text); font-weight: 600; }
   .envchip { font-size: 10px; font-weight: 800; letter-spacing: 0.8px; color: var(--blue);
              background: rgba(0, 112, 224, 0.1); border-radius: 4px; padding: 3px 8px; }
+  .rolechip { font-size: 10px; font-weight: 800; letter-spacing: 0.6px; border-radius: 4px; padding: 3px 8px;
+              background: #e2f5ec; color: var(--green); }
+  .rolechip[data-v="seller"] { background: rgba(0, 112, 224, 0.1); color: var(--blue); }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 30px 80px; }
   h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.2px; }
   .statusline { color: var(--muted); font-size: 13px; margin: 8px 0 22px; }
@@ -72,8 +75,8 @@
 
 <div class="topbar">
   <a class="wordmark" href="/"><span class="pay">Carte</span><span class="pal">Blanche</span></a>
-  <span class="account"><b>sam (principal)</b> <span class="envchip">SANDBOX</span></span>
-  <span style="margin-left:auto;font-size:13px"><a href="/dashboard">← Resolution Center</a></span>
+  <span class="account"><b id="acctName">buyer</b> <span class="rolechip" id="roleChip"></span> <span class="envchip">SANDBOX</span></span>
+  <span style="margin-left:auto;font-size:13px"><a href="/">← Console</a><a href="/dashboard" data-role="seller" style="margin-left:14px">← Resolution Center</a></span>
 </div>
 
 <div class="wrap">
@@ -149,7 +152,7 @@ async function main() {
         </span>
       </div>
       <div class="dispute-panel" id="dp-${esc(r.receiptId)}">
-        <b>You keep the proof:</b> this contestation is sealed the moment you file it — reason, receipt, order id — and the signed evidence pack travels with you into PayPal's flow.
+        <b>You keep the proof:</b> sealing here journals YOUR contestation (reason, receipt, order id) with its evidence pack. The PayPal dispute itself is filed on PayPal's own site — the SELLER's cockpit picks the case up when PayPal emits it. Two seats, one story.
         <select id="drs-${esc(r.receiptId)}">
           <option value="ITEM_NOT_RECEIVED">${REASON_LABELS.ITEM_NOT_RECEIVED}</option>
           <option value="ITEM_NOT_AS_DESCRIBED">${REASON_LABELS.ITEM_NOT_AS_DESCRIBED}</option>
@@ -255,6 +258,23 @@ window.stopAgent = async (mandateId) => {
 };
 
 main().catch((e) => { $("agents").innerHTML = '<div class="empty">✗ ' + esc(e.message) + "</div>"; });
+
+// --- role-aware nav (the seat chosen at login drives what's visible) ----------
+(async () => {
+  try {
+    const me = await (await fetch("/api/auth/me")).json();
+    document.querySelectorAll("[data-role]").forEach((el) => {
+      if (el.dataset.role && el.dataset.role !== me.role) el.style.display = "none";
+    });
+    const chip = document.getElementById("roleChip");
+    if (chip) {
+      chip.textContent = me.role === "seller" ? "SELLER · Resolution Center" : "BUYER · my agents";
+      chip.dataset.v = me.role;
+    }
+    const acct = document.getElementById("acctName");
+    if (acct && me.sub) acct.textContent = me.sub;
+  } catch { /* not fatal — page still renders */ }
+})();
 </script>
 </body>
 </html>

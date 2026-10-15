@@ -75,8 +75,10 @@ app.use(express.json());
 // ---------------------------------------------------------------------------
 const SESSION_COOKIE = "cb_session";
 const SESSION_TTL_MS = 12 * 3_600_000;
-const sessions = new Map<string, { sub: string; expiresAt: number }>();
-const oidcStates = new Map<string, string>(); // state → next path (anti-CSRF, one-time)
+type Role = "buyer" | "seller";
+const normalizeRole = (r: unknown): Role => (r === "seller" ? "seller" : "buyer");
+const sessions = new Map<string, { sub: string; role: Role; expiresAt: number }>();
+const oidcStates = new Map<string, string>(); // state → "next|role" (anti-CSRF, one-time)
 
 // Sessions + OIDC states survive process death. The free tier SPINS DOWN
 // after 15 idle minutes (that's the OAuth killer: the buyer sits on PayPal's
@@ -89,7 +91,7 @@ const WEB_SESSIONS_FILE = path.join(STATE_DIR, "web-sessions.json");
 function loadWebSessions(): void {
   try {
     const raw = JSON.parse(fs.readFileSync(WEB_SESSIONS_FILE, "utf8")) as {
-      sessions: Array<[string, { sub: string; expiresAt: number }]>;
+      sessions: Array<[string, { sub: string; role: Role; expiresAt: number }]>;
       oidcStates: Array<[string, string]>;
     };
     const now = Date.now();
@@ -132,20 +134,41 @@ function cookieToken(req: express.Request): string | undefined {
   return raw?.slice(SESSION_COOKIE.length + 1);
 }
 
-function sessionOf(req: express.Request): { sub: string } | undefined {
+function sessionOf(req: express.Request): { sub: string; role: Role } | undefined {
   const token = cookieToken(req);
   if (!token) return undefined;
   const session = sessions.get(token);
   if (!session || session.expiresAt < Date.now()) return undefined;
-  return { sub: session.sub };
+  return { sub: session.sub, role: session.role };
 }
 
 const GATED_PAGES = new Set(["/", "/index.html", "/dashboard", "/board", "/planner", "/oversight"]);
+// Two seats, two views — same sealed data underneath. The buyer grants and
+// supervises; the seller answers disputes. Crossing the line bounces you to
+// your own home page, and the nav never shows the other side's tools.
+const ROLE_PAGES: Record<string, Role> = {
+  "/dashboard": "seller",
+  "/board": "seller",
+  "/planner": "buyer",
+  "/oversight": "buyer",
+};
 app.use((req, res, next) => {
-  if (req.method === "GET" && GATED_PAGES.has(req.path) && !sessionOf(req)) {
-    return res.redirect("/login?next=" + encodeURIComponent(req.path));
+  if (req.method !== "GET" || !GATED_PAGES.has(req.path)) return next();
+  const session = sessionOf(req);
+  if (!session) return res.redirect("/login?next=" + encodeURIComponent(req.path));
+  const need = ROLE_PAGES[req.path];
+  if (need && session.role !== need) {
+    // wrong seat — bounce to your own home, not to a 403 wall
+    return res.redirect(session.role === "seller" ? "/dashboard" : "/?msg=role");
   }
   next();
+});
+
+// who am I — the pages read this to render the right nav and role chip
+app.get("/api/auth/me", (req, res) => {
+  const session = sessionOf(req);
+  if (!session) return res.status(401).json({ error: "no session" });
+  res.json({ sub: session.sub, role: session.role, home: session.role === "seller" ? "/dashboard" : "/" });
 });
 
 app.use(express.static(webRoot));
@@ -176,16 +199,17 @@ app.get("/login", (_req, res) => {
 });
 
 app.post("/api/auth/login", (req, res) => {
-  const body = (req.body ?? {}) as { email?: string; sub?: string };
+  const body = (req.body ?? {}) as { email?: string; sub?: string; role?: string };
   const sub = String(body.sub ?? "sandbox-merchant").slice(0, 64);
+  const role = normalizeRole(body.role);
   const token = randomBytes(32).toString("hex");
-  sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+  sessions.set(token, { sub, role, expiresAt: Date.now() + SESSION_TTL_MS });
   persistWebSessions();
   res.setHeader(
     "Set-Cookie",
     `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   );
-  res.json({ ok: true, sub, redirect: "/dashboard" });
+  res.json({ ok: true, sub, role, redirect: role === "seller" ? "/dashboard" : "/" });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -1135,7 +1159,8 @@ app.get("/api/auth/paypal/start", (req, res) => {
     return res.redirect("/login?error=" + encodeURIComponent("PayPal login not configured (missing client credentials)"));
   }
   const state = randomBytes(16).toString("hex");
-  oidcStates.set(state, safeNext((req.query as { next?: string }).next));
+  const role = normalizeRole((req.query as { role?: string }).role);
+  oidcStates.set(state, safeNext((req.query as { next?: string }).next) + "|" + role);
   persistWebSessions();
   const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
   const redirectUri = `${base}/api/auth/paypal/callback`;
@@ -1159,7 +1184,9 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
   // catch async handler rejections — an uncaught throw here 502s on Render).
   // Any surprise becomes a redirect with the honest reason.
   try {
-    const nextPath = q.state ? oidcStates.get(q.state) : undefined;
+    const stateValue = q.state ? oidcStates.get(q.state) : undefined;
+    const [nextPath, stateRole] = stateValue ? stateValue.split("|") : [undefined, undefined];
+    const role = normalizeRole(stateRole);
     if (q.error) return fail("denied", q.error_description ?? q.error);
     if (!q.code || !q.state || !oidcStates.delete(q.state)) {
       return fail("state", "unknown or expired state — the instance likely restarted between login and callback; retry the button");
@@ -1178,7 +1205,7 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     if (!payerId && !email) return fail("userinfo", "empty profile");
     const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
     const token = randomBytes(32).toString("hex");
-    sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+    sessions.set(token, { sub, role, expiresAt: Date.now() + SESSION_TTL_MS });
     persistWebSessions();
     res.setHeader(
       "Set-Cookie",
@@ -1187,11 +1214,12 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     // Minimization: the journal proves WHO logged in without archiving the email.
     journal.append("paypal_login", {
       sub,
+      role,
       email_domain: email.includes("@") ? email.split("@")[1] : undefined,
       name_given: typeof ui.data.given_name === "string" ? (ui.data.given_name as string).slice(0, 40) : undefined,
       oidc: true,
     });
-    return res.redirect(nextPath ?? "/");
+    return res.redirect(nextPath ?? (role === "seller" ? "/dashboard" : "/"));
   } catch (e) {
     return fail("internal", (e as Error).message);
   }
