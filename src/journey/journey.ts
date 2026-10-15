@@ -99,7 +99,7 @@ export async function executeJourney(
   j: Journey,
   journal: Journal,
   enforcer: Enforcer,
-  opts?: { cycle?: string },
+  opts?: { cycle?: string; keySuffix?: string },
 ): Promise<Journey> {
   if (!j.mandateId) throw new Error("journey is not approved yet — no mandate to spend under");
   const cycle = opts?.cycle?.trim();
@@ -125,7 +125,12 @@ export async function executeJourney(
       currency: j.currency,
       ...(item.merchant ? { payee: item.merchant } : {}),
       description: `[journey ${j.name}] ${item.title}`,
-      logicalKey: cycle ? `jrn-${j.id}-${cycle}-${item.id}` : `jrn-${j.id}-${item.id}`,
+      // scope = cycle (per-period) + keySuffix (e.g. the price-drop event seq):
+      // each scope buys ONCE — the same drop re-clicked never double-spends,
+      // a NEW drop is a genuinely new purchase at the new price
+      logicalKey: [cycle, opts?.keySuffix].filter(Boolean).length
+        ? `jrn-${j.id}-${[cycle, opts?.keySuffix].filter(Boolean).join("-")}-${item.id}`
+        : `jrn-${j.id}-${item.id}`,
     });
     journal.append("journey_line_attempted", {
       journey_id: j.id,
@@ -270,6 +275,35 @@ export class JourneyPlanner {
   /** Persists in-place mutations done outside planner methods (journey runs). */
   persistNow(): void {
     this.persist();
+  }
+
+  /**
+   * A Channel3 price drop lands on every journey line watching that product:
+   * the line's price IS the drop now (promotions apply to the basket, that is
+   * the whole point of watching). The update is journalled per line — the
+   * mandate caps still govern the re-purchase, a lower price just fits under
+   * them more easily.
+   */
+  applyPriceDrop(productId: string, newPrice: string): Array<{ journeyId: string; lineId: string; oldPrice: string }> {
+    const changes: Array<{ journeyId: string; lineId: string; oldPrice: string }> = [];
+    for (const j of this.journeys.values()) {
+      for (const item of j.items) {
+        if (item.productId === productId && item.price !== newPrice) {
+          const oldPrice = item.price;
+          item.price = newPrice;
+          changes.push({ journeyId: j.id, lineId: item.id, oldPrice });
+          this.journal.append("journey_line_price_updated", {
+            journey_id: j.id,
+            line_id: item.id,
+            product_id: productId,
+            old_price: oldPrice,
+            new_price: newPrice,
+          });
+        }
+      }
+    }
+    if (changes.length) this.persist();
+    return changes;
   }
 
   private persist(): void {

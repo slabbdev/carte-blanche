@@ -550,14 +550,69 @@ app.post("/api/journeys/:id/run", async (req, res) => {
   const j = journeys.get(req.params.id);
   if (!j) return res.status(404).json({ error: "journey not found" });
   if (!j.mandateId) return res.status(409).json({ error: "approve the journey first — there is no mandate to spend under" });
-  const cycle = (req.body as { cycle?: string } | undefined)?.cycle?.trim();
+  const body = (req.body ?? {}) as { cycle?: string; drop_seq?: number | string };
+  const cycle = body.cycle?.trim();
   if (cycle && !/^\d{4}-\d{2}$/.test(cycle)) {
     return res.status(400).json({ error: 'cycle must look like "YYYY-MM"' });
   }
+  // a price-drop re-run gets its own logical-key scope: the same drop re-clicked
+  // stays idempotent, a NEW drop is a genuinely new purchase at the new price
+  const dropSeq = String(body.drop_seq ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
   try {
-    const after = await executeJourney(j, journal, enforcer, cycle ? { cycle } : undefined);
+    const after = await executeJourney(j, journal, enforcer, {
+      ...(cycle ? { cycle } : {}),
+      ...(dropSeq ? { keySuffix: `drop${dropSeq}` } : {}),
+    });
+
+    // PRICE PROTECTION: a drop-scoped re-run whose lines hit a budget wall,
+    // where the SAME item was already purchased this window at a higher
+    // price, refunds the difference through the rail. The promo applies to
+    // money already spent — that is what price protection means.
+    const protection: Array<{ line: string; amount: string; currency: string; refundId?: string; simulated?: boolean; paypalStatus?: number; detail?: string }> = [];
+    if (dropSeq) {
+      const updates = [...journal.eventsOfType("journey_line_price_updated")].reverse();
+      for (const item of after.items.filter((i) => i.status === "refused" && /OVER_(WINDOW|TOTAL)_CAP/.test(i.detail ?? ""))) {
+        const upd = updates.find((e) => (e.data as any).line_id === item.id);
+        const receipt = enforcer
+          .listReceipts(j.mandateId)
+          .find((r) => item.title && r.description.includes(item.title));
+        if (!upd || !receipt) continue;
+        const d = upd.data as { old_price?: string; new_price?: string };
+        const cur = item.currency || "USD";
+        let diffMinor = 0n;
+        try {
+          diffMinor = parseAmount(String(d.old_price), cur) - parseAmount(String(d.new_price), cur);
+        } catch { continue; }
+        if (diffMinor <= 0n) continue;
+        const diff = formatAmount(diffMinor, cur);
+        if (rails.mode !== "mock" && paypal) {
+          const rf = await paypal.refundCapture({
+            captureId: receipt.captureId,
+            amount: diff,
+            currency: cur,
+            note: `carte-blanche price protection: dropped from ${d.old_price} to ${d.new_price}`,
+            requestId: `cb-droprefund-${item.id}-${dropSeq}`.slice(0, 64),
+          });
+          const refundId = (rf.data as { id?: string } | undefined)?.id ?? "";
+          protection.push({ line: item.title, amount: diff, currency: cur, ...(refundId ? { refundId } : {}), paypalStatus: rf.status, ...(!rf.ok ? { detail: JSON.stringify(rf.data ?? {}).slice(0, 200) } : {}) });
+          journal.append("journey_price_protection", {
+            journey_id: j.id, line_id: item.id, receipt_id: receipt.receiptId, capture_id: receipt.captureId,
+            amount: diff, currency: cur, ...(refundId ? { refund_id: refundId } : {}),
+            paypal_status: rf.status, source: "price drop re-run",
+          });
+        } else {
+          // mock rails: no PayPal client — journal the intent, visibly simulated
+          protection.push({ line: item.title, amount: diff, currency: cur, simulated: true, detail: "mock rails: the refund is journalled as intent only" });
+          journal.append("journey_price_protection", {
+            journey_id: j.id, line_id: item.id, amount: diff, currency: cur,
+            simulated: true, source: "price drop re-run (mock)",
+          });
+        }
+      }
+    }
+
     journeys.persistNow();
-    res.json({ ...after, total: journeyTotal(after) });
+    res.json({ ...after, total: journeyTotal(after), ...(protection.length ? { price_protection: protection } : {}) });
   } catch (e) {
     res.status(502).json({ error: `journey execution failed: ${(e as Error).message}` });
   }
@@ -1088,6 +1143,7 @@ app.post("/api/webhooks/channel3", (req, res) => {
     return res.status(202).json({ received: true, ignored: true, detail: parsed.detail });
   }
   // which journeys care about this product?
+  const applied = journeys.applyPriceDrop(parsed.productId, parsed.newPrice);
   const affected = journeys.list().filter((j) => j.items.some((i) => i.productId === parsed.productId));
   const event = journal.append("channel3_price_drop", {
     product_id: parsed.productId,
@@ -1096,9 +1152,10 @@ app.post("/api/webhooks/channel3", (req, res) => {
     ...(parsed.oldPrice ? { old_price: parsed.oldPrice } : {}),
     source: "channel3 webhook",
     signature: "none documented by channel3 — treated as a trigger, not as proof",
+    lines_updated: applied.length,
     ...(affected.length ? { journeys: affected.map((j) => j.id) } : {}),
   });
-  res.json({ received: true, journaled: { seq: event.seq }, journeys_affected: affected.length });
+  res.json({ received: true, journaled: { seq: event.seq }, lines_updated: applied.length, journeys_affected: affected.length });
 });
 
 // Demo injection, visibly labeled SAMPLE: lets the drop→re-run story play in
@@ -1109,6 +1166,7 @@ app.post("/api/catalog/price-sample", (req, res) => {
   const price = /^\d+(\.\d+)?$/.test(String(body.price ?? "")) ? String(body.price) : "";
   if (!productId || !price) return res.status(400).json({ error: "product_id and numeric price are required" });
   const oldPrice = /^\d+(\.\d+)?$/.test(String(body.old_price ?? "")) ? String(body.old_price) : undefined;
+  const applied = journeys.applyPriceDrop(productId, price);
   const affected = journeys.list().filter((j) => j.items.some((i) => i.productId === productId));
   const event = journal.append("channel3_price_drop", {
     product_id: productId,
@@ -1116,9 +1174,10 @@ app.post("/api/catalog/price-sample", (req, res) => {
     ...(oldPrice ? { old_price: oldPrice } : {}),
     currency: String(body.currency ?? "USD"),
     source: "sample injection (demo)",
+    lines_updated: applied.length,
     ...(affected.length ? { journeys: affected.map((j) => j.id) } : {}),
   });
-  res.status(201).json({ ok: true, journaled: { seq: event.seq }, journeys_affected: affected.length });
+  res.status(201).json({ ok: true, journaled: { seq: event.seq }, lines_updated: applied.length, journeys_affected: affected.length });
 });
 
 // --- Log in with PayPal (the REAL one) -----------------------------------------

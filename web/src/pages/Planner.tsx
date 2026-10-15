@@ -43,7 +43,12 @@ export default function Planner() {
   async function loadWatch() {
     try {
       const feed = await api<{ events: any[] }>("/api/journal/events?limit=100");
-      setWatch((feed.events ?? []).filter((e) => e.type === "channel3_price_drop").slice(-6).reverse());
+      const watchable = new Set((journey?.items ?? []).map((i) => i.productId).filter(Boolean));
+      setWatch((feed.events ?? [])
+        .filter((e) => e.type === "channel3_price_drop")
+        // the re-run button is journey-scoped: show only drops this basket watches
+        .filter((e) => !watchable.size || watchable.has((e.data as any)?.product_id))
+        .slice(-6).reverse());
     } catch { setWatch([]); }
   }
 
@@ -304,7 +309,7 @@ export default function Planner() {
           <div><div className="k">Mandate</div><div className="mono">{journey?.mandateId ?? "—"}</div></div>
           <div style={{ marginLeft: "auto" }}><a href="/dashboard">disputes →</a> · <a href="/verify">verify →</a></div>
         </div>
-        {hint && <div className="hint" style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 10 }}>{esc(hint)}</div>}
+        {hint && <div className="hint" id="j-hint" style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 10 }}>{esc(hint)}</div>}
       </section>
 
       <section className="card">
@@ -321,7 +326,7 @@ export default function Planner() {
               <span className="mono">{esc(String(d.product_id ?? ""))}</span>
               <span className="muted">{esc(String(d.old_price ?? "—"))} →</span>
               <span className="amt">{esc(String(d.new_price ?? ""))} {esc(String(d.currency ?? ""))}</span>
-              <button className="ghost" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => reactToDrop(String(d.product_id ?? ""))}>re-run the cycle</button>
+              <button className="ghost" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => reactToDrop(String(d.product_id ?? ""), String(e.seq ?? ""))}>re-run at the new price</button>
             </div>
           );
         })}

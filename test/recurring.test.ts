@@ -222,3 +222,44 @@ describe("recurring journeys", async () => {
     await expect(executeJourney(j, ctx.journal, enforcer, { cycle: "january" })).rejects.toThrow(/YYYY-MM/);
   });
 });
+
+describe("price drops apply to the basket (the promo story)", () => {
+  it("applyPriceDrop re-prices watching lines; a drop-scoped re-run buys at the NEW price exactly once", async () => {
+    const { JourneyPlanner, executeJourney } = await import("../src/journey/journey.js");
+    const ctx = setup();
+    const enforcer = new Enforcer(ctx.journal, ctx.store, new MockRails(), ctx.keys, ctx.stateDir);
+    const planner = new JourneyPlanner(ctx.stateDir, ctx.journal);
+    const planned = planner.plan("deal basket", "USD", [{ title: "PS5", merchant: "bjs.com", price: "499.00" }]);
+    const signed = signMandate({
+      id: newMandateId(), version: "cb-mandate/v1", principal: "p", agent: "a", purpose: "deal basket",
+      limits: { currency: "USD", maxPerTransaction: "600.00", maxTotalSpend: "1200.00",
+        windowStart: new Date(Date.now() - 60000).toISOString(), windowEnd: new Date(Date.now() + 3.6e6).toISOString() },
+      issuedAt: new Date().toISOString(),
+    }, ctx.keys.server.privateKeyB64, ctx.keys.server.publicKeyB64);
+    ctx.store.put(signed);
+    const j = planner.markApproved(planned.id, signed.mandate.id)!;
+    j.items[0].productId = "ps5canon";
+
+    const first = await executeJourney(j, ctx.journal, enforcer);
+    expect(first.items[0].status).toBe("receipt");
+    expect(first.items[0].price).toBe("499.00");
+
+    // the drop lands: watching lines re-price + journal the update
+    const changes = planner.applyPriceDrop("ps5canon", "399.00");
+    expect(changes).toHaveLength(1);
+    expect(changes[0].oldPrice).toBe("499.00");
+    expect(j.items[0].price).toBe("399.00");
+    expect(ctx.journal.eventsOfType("journey_line_price_updated")).toHaveLength(1);
+
+    // drop-scoped re-run: new logical key, new purchase at the NEW price
+    const second = await executeJourney(j, ctx.journal, enforcer, { cycle: "2026-10", keySuffix: "drop42" });
+    expect(second.items[0].status).toBe("receipt");
+    expect(second.items[0].price).toBe("399.00");
+    expect(ctx.journal.capturedMinorFor(signed.mandate.id)).toBe(49900n + 39900n);
+
+    // re-clicking the SAME drop replays the same logical purchase — no double spend
+    await executeJourney(j, ctx.journal, enforcer, { cycle: "2026-10", keySuffix: "drop42" });
+    expect(ctx.journal.capturedMinorFor(signed.mandate.id)).toBe(49900n + 39900n);
+    expect(ctx.journal.eventsOfType("journey_line_price_updated")).toHaveLength(1);
+  });
+});
