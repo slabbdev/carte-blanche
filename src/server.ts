@@ -586,6 +586,35 @@ app.get("/api/denials/:id/full", (req, res) => {
   res.json({ outcome: "denial", ...full });
 });
 
+// The BUYER-side dispute flow. Filing happens on PayPal's side (their Disputes
+// API is merchant-facing); what we seal is the buyer's contestation INTENT the
+// moment it forms — reason, receipt, order, amount — so the buyer walks into
+// PayPal's flow carrying signed evidence, not screenshots.
+app.post("/api/receipts/:id/dispute-request", (req, res) => {
+  const receipt = enforcer.listReceipts().find((r) => r.receiptId === req.params.id);
+  if (!receipt) return res.status(404).json({ error: "receipt not found" });
+  const reason = String((req.body as { reason?: string } | undefined)?.reason ?? "ITEM_NOT_RECEIVED").slice(0, 60);
+  const note = String((req.body as { note?: string } | undefined)?.note ?? "").slice(0, 400);
+  const event = journal.append("buyer_dispute_requested", {
+    receipt_id: receipt.receiptId,
+    mandate_id: receipt.mandateId,
+    order_id: receipt.orderId,
+    capture_id: receipt.captureId,
+    amount: receipt.amount,
+    currency: receipt.currency,
+    buyer_reason: reason,
+    ...(note ? { buyer_note: note } : {}),
+    rail: "paypal",
+  });
+  res.status(201).json({
+    ok: true,
+    journaled: { seq: event.seq, event_hash: event.hash, ts: event.ts },
+    receipt: { receiptId: receipt.receiptId, orderId: receipt.orderId, amount: receipt.amount, currency: receipt.currency },
+    next: "file on PayPal (Resolution Center) — this receipt's signed evidence pack travels with you",
+    verify: `/verify/${receipt.receiptId}`,
+  });
+});
+
 app.get("/api/verify/:kind/:id", (req, res) => {
   const { kind, id } = req.params;
   if (kind === "receipts") {

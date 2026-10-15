@@ -56,6 +56,12 @@
   button.stop { background: #fff; border: 1px solid #eec4bc; color: var(--red); font-weight: 700; }
   button.stop:hover { background: #fdeae6; }
   .mandate-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px dashed var(--border); font-size: 13px; }
+  .buy-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .buy-row .desc { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .buy-row .amt { font-weight: 700; white-space: nowrap; }
+  .dispute-panel { display: none; padding: 10px 12px; margin: 4px 0 8px; background: #fafbfd; border: 1px solid var(--border); border-radius: 8px; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .dispute-panel.open { display: flex; }
+  .dispute-panel select, .dispute-panel input { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid #c8cdd6; border-radius: 8px; background: #fff; color: var(--text); }
   .feed { font-size: 12.5px; }
   .feed div { padding: 5px 0; border-top: 1px solid var(--border); }
   .feed div:first-child { border-top: 0; }
@@ -73,9 +79,17 @@
 <div class="wrap">
   <header><h1>My agents</h1></header>
   <p class="statusline">The buyer's view: what your agents spent, what they remember about you,
-  which walls held — and the switch that ends their authority instantly. This is the oversight tab
+  which walls held — and the switch that ends their authority instantly. Disagree with a purchase?
+  One click seals your contestation with its signed evidence pack. This is the oversight tab
   PayPal's buyer app would grow.</p>
   <div id="agents"><div class="empty">loading…</div></div>
+
+  <section class="card">
+    <h2>Dispute watch — PayPal's side</h2>
+    <p class="sub">What PayPal sees on these orders right now. When a dispute opens, your sealed
+    contestation and the agent's signed receipts are already waiting in your evidence packs.</p>
+    <div id="watch"><div class="empty">loading…</div></div>
+  </section>
 
   <section class="card">
     <h2>Recent activity (sealed journal)</h2>
@@ -97,9 +111,10 @@ async function api(path, opts) {
 }
 
 async function main() {
-  const [mandates, prefs] = await Promise.all([
+  const [mandates, prefs, receipts] = await Promise.all([
     api("/api/mandates"),
     api("/api/agent/preferences").catch(() => ({ preferences: {}, notes: [] })),
+    api("/api/receipts").catch(() => ({ receipts: [] })),
   ]);
 
   // group mandates by agent
@@ -109,6 +124,41 @@ async function main() {
     if (!byAgent.has(a)) byAgent.set(a, []);
     byAgent.get(a).push(m);
   }
+  // receipts indexed by mandate so each agent card shows ITS purchases
+  const receiptsByMandate = new Map();
+  for (const r of receipts.receipts ?? []) {
+    if (!receiptsByMandate.has(r.mandateId)) receiptsByMandate.set(r.mandateId, []);
+    receiptsByMandate.get(r.mandateId).push(r);
+  }
+
+  const REASON_LABELS = { ITEM_NOT_RECEIVED: "item not received", ITEM_NOT_AS_DESCRIBED: "not as described", OTHER: "other" };
+
+  const purchaseRows = (list) => {
+    return (list ?? [])
+      .flatMap((m) => receiptsByMandate.get(m.mandate.id) ?? [])
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .slice(0, 8)
+      .map((r) => `
+      <div class="buy-row" data-receipt="${esc(r.receiptId)}">
+        <span class="mono">${esc(r.createdAt.replace("T", " ").slice(0, 16))}</span>
+        <span class="desc" title="${esc(r.description)}">${esc(r.description)}</span>
+        <span class="amt">${esc(r.amount)} ${esc(r.currency)}</span>
+        <a href="/verify/${esc(r.receiptId)}">evidence →</a>
+        <span class="dispute-slot">
+          <button class="stop" style="padding:4px 12px;font-size:12px" onclick="toggleDispute('${esc(r.receiptId)}')">🛡️ Dispute</button>
+        </span>
+      </div>
+      <div class="dispute-panel" id="dp-${esc(r.receiptId)}">
+        <b>You keep the proof:</b> this contestation is sealed the moment you file it — reason, receipt, order id — and the signed evidence pack travels with you into PayPal's flow.
+        <select id="drs-${esc(r.receiptId)}">
+          <option value="ITEM_NOT_RECEIVED">${REASON_LABELS.ITEM_NOT_RECEIVED}</option>
+          <option value="ITEM_NOT_AS_DESCRIBED">${REASON_LABELS.ITEM_NOT_AS_DESCRIBED}</option>
+          <option value="OTHER">${REASON_LABELS.OTHER}</option>
+        </select>
+        <input id="drn-${esc(r.receiptId)}" placeholder="note (optional)" style="flex:1;min-width:140px" />
+        <button style="padding:5px 14px;font-size:12.5px" onclick="fileDispute('${esc(r.receiptId)}')">Seal my contestation</button>
+      </div>`);
+  };
 
   const cards = [];
   for (const [agent, list] of byAgent) {
@@ -124,6 +174,7 @@ async function main() {
         <span>max ${esc(m.mandate.limits.maxPerTransaction)} ${esc(m.mandate.limits.currency)} / tx · total ${esc(m.mandate.limits.maxTotalSpend)}</span>
         <span style="margin-left:auto">${m.revoked ? "" : '<button class="stop" onclick="stopAgent(\'' + esc(m.mandate.id) + '\')">✕ STOP</button>'}</span>
       </div>`).join("");
+    const buys = purchaseRows(list);
 
     cards.push(`
       <div class="agent">
@@ -141,6 +192,9 @@ async function main() {
           <span class="pill mock">journalled</span>
         </div>` : ""}
         ${mandateRows}
+        ${buys.length ? `
+        <div class="muted" style="font-size:10.5px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;margin:14px 0 2px">My purchases — each one carries its signed evidence pack</div>
+        ${buys.join("")}` : ""}
       </div>`);
   }
   $("agents").innerHTML = cards.length ? cards.join("") : '<div class="empty">No agents yet — grant a mandate in the <a href="/">console</a>.</div>';
@@ -149,7 +203,46 @@ async function main() {
   $("feed").innerHTML = (feed.events ?? []).slice().reverse().map((e) =>
     `<div><span class="t">${esc(e.ts.replace("T", " ").slice(0, 19))}</span><b>${esc(e.type)}</b> <span class="mono">${esc(JSON.stringify(e.data).slice(0, 110))}…</span></div>`
   ).join("");
+
+  // dispute watch: PayPal's own dispute state, the buyer's lens (read-only)
+  try {
+    const d = await api("/api/disputes");
+    const rows = d.disputes ?? [];
+    $("watch").innerHTML = rows.length ? rows.map((x) => `
+      <div class="buy-row">
+        <span class="mono">${esc(x.dispute_id ?? x.id ?? "")}</span>
+        <span class="pill ${String(x.status ?? "").includes("RESOLVED") ? "ok" : "warn"}">${esc(x.status ?? "?")}</span>
+        <span class="muted">${esc(x.reason ?? "")}</span>
+        ${x.respond_by ? `<span class="muted">respond by <b>${esc(String(x.respond_by).replace("T", " ").slice(0, 16))}</b></span>` : ""}
+        <span style="margin-left:auto"></span>
+      </div>`).join("") : '<div class="empty">No disputes on PayPal\'s side right now.</div>';
+  } catch (e) {
+    $("watch").innerHTML = '<div class="empty">dispute feed unavailable: ' + esc(e.message) + "</div>";
+  }
 }
+
+window.toggleDispute = (receiptId) => {
+  document.getElementById("dp-" + receiptId)?.classList.toggle("open");
+};
+
+window.fileDispute = async (receiptId) => {
+  const reason = document.getElementById("drs-" + receiptId)?.value ?? "ITEM_NOT_RECEIVED";
+  const note = document.getElementById("drn-" + receiptId)?.value ?? "";
+  try {
+    const out = await api(`/api/receipts/${encodeURIComponent(receiptId)}/dispute-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, note }),
+    });
+    const slot = document.querySelector(`.buy-row[data-receipt="${CSS.escape(receiptId)}"] .dispute-slot`);
+    if (slot) {
+      slot.innerHTML = `<a class="pill ok" style="text-decoration:none" href="${esc(out.verify)}" title="sealed at seq ${esc(String(out.journaled.seq))}">SEALED #${esc(String(out.journaled.seq))}</a>`;
+    }
+    document.getElementById("dp-" + receiptId)?.classList.remove("open");
+  } catch (e) {
+    alert("could not seal the contestation: " + e.message);
+  }
+};
 
 window.stopAgent = async (mandateId) => {
   if (!confirm("STOP this mandate? The agent loses ALL authority under it, immediately and irreversibly (revocation is journalled).")) return;

@@ -21,6 +21,11 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     autoDeployTrigger: commit
+    # Preview Environments: every pull request gets its own throwaway instance
+    # (free plan included) — sponsor/demo changes can be reviewed live before
+    # they touch main. Journal state stays per-instance, so previews never
+    # write into the production chain.
+    previewsEnabled: true
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -42,6 +47,8 @@ services:
         sync: false
       - key: TSA_URLS
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false # optional — autopilot runs its LLM policy when set, scripted policy otherwise
 
   # Hourly TSA anchor: keeps the RFC 3161 "provable WHEN" continuous instead of
   # anchoring only when a purchase happens. POSTs the public additive-evidence

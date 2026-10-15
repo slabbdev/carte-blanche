@@ -52,6 +52,9 @@ MCP server: `mcp/server.ts` in the repo (`npm run mcp`) — the same API as agen
   a cycle are idempotent, the next month runs fresh under the same mandate.
 - GET  /api/disputes — buyer disputes with 10-day respond-by deadlines; evidence packs at
   /api/disputes/:id/evidence-pack.
+- POST /api/receipts/:id/dispute-request — the BUYER's contestation: seals the dispute intent
+  (reason, receipt, order id) into the journal the moment it forms, so the buyer enters PayPal's
+  flow carrying signed evidence, not screenshots.
 
 ## Behavior rules for agents
 
