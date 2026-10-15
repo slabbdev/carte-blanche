@@ -45,6 +45,7 @@ export default function Console() {
   const [trAgent, setTrAgent] = useState("shopping-agent-1");
   const [trOut, setTrOut] = useState("");
   const [clientId, setClientId] = useState("");
+  const [money, setMoney] = useState<{ balance?: { value: string; currency: string }; transactions: any[]; count: number } | null>(null);
   const grantRef = useRef<HTMLDivElement>(null);
   const noMandate = !selMandate;
   const goGrant = () => {
@@ -67,6 +68,7 @@ export default function Console() {
         : `Sealed journal: <b style="color:var(--red)">BROKEN at seq ${v.brokenAt}</b>`);
     }).catch(() => setJournal("journal unavailable"));
     api<{ clientId: string }>("/api/config").then((c) => setClientId(c.clientId)).catch(() => {});
+    api("/api/paypal/money").then(setMoney).catch(() => setMoney({ transactions: [], count: 0 }));
   }, []);
 
   async function refreshMandates() {
@@ -369,6 +371,35 @@ export default function Console() {
           <b> 🤖 Autopilot</b> runs the whole agent server-side under the same mandate (LLM when a key is
           configured, deterministic policy otherwise) — transcript and artifacts sealed either way.
         </p>
+      </section>
+
+      <section className="card">
+        <h2>PayPal sandbox — money flow</h2>
+        <p className="sub">The merchant account's REAL balance and last movements, straight from PayPal's
+        Transaction Search. Captures move it up, refunds move it down — the sandbox economy is live.</p>
+        {money && money.balance ? (
+          <>
+            <div className="stats">
+              <div className="stat"><div className="k">Available balance</div><div className="v">{money.balance.value} {money.balance.currency}</div></div>
+              <div className="stat"><div className="k">Movements (31d)</div><div className="v">{money.count}</div></div>
+            </div>
+            <div style={{ maxHeight: 260, overflow: "auto" }}>
+              {(money.transactions ?? []).map((r: any, i: number) => (
+                <div className="buy-row" key={i}>
+                  <span className="mono">{esc(String(r.date).replace("T", " ").slice(0, 16))}</span>
+                  <span className="desc" title={esc(r.subject)}>{esc(r.subject)}</span>
+                  {r.agentMarker && <span className="pill paypal" title={"agent purchase: " + esc(r.agentMarker)}>🤖 {esc(String(r.agentMarker).replace("agent=", ""))}</span>}
+                  <span className="amt" style={{ color: Number(r.amount) >= 0 ? "var(--green)" : "var(--red)" }}>
+                    {Number(r.amount) >= 0 ? "+" : ""}{esc(r.amount)} {esc(r.currency)}
+                  </span>
+                  <span className="muted">bal {esc(String(r.balanceAfter ?? "—"))}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="empty">{money ? "mock rails: the sandbox balance is a PayPal-side view" : "loading…"}</div>
+        )}
       </section>
 
       <section className="card">

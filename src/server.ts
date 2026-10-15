@@ -1268,6 +1268,48 @@ app.get("/llms.txt", (_req, res) => {
   res.sendFile(path.join(repoRoot, "src", "web", "llms.txt"));
 });
 
+// The sandbox account's REAL money view, straight from PayPal's Transaction
+// Search: each transaction carries the balance AFTER it, so the latest one IS
+// the account balance. Captures move it up, refunds move it down — the user
+// watches the sandbox economy actually move.
+app.get("/api/paypal/money", async (_req, res) => {
+  if (rails.mode === "mock" || !paypal) {
+    return res.status(409).json({ error: "mock rails: the sandbox balance is a PayPal-side view" });
+  }
+  try {
+    const end = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    const start = new Date(Date.now() - 31 * 864e5).toISOString().replace(/\.\d+Z$/, "Z");
+    const res2 = await paypal.listTransactions(start, end);
+    if (!res2.ok) return res.status(502).json({ error: `paypal transactions ${res2.status}` });
+    const all = [...(res2.data?.transaction_details ?? [])].sort((a, b) =>
+      String(a.transaction_info.transaction_initiation_date ?? "") < String(b.transaction_info.transaction_initiation_date ?? "") ? 1 : -1);
+    const latest = all[0]?.transaction_info;
+    const balance = latest?.available_balance ?? latest?.ending_balance ?? null;
+    const rows = all.slice(0, 10).map((t) => {
+      const ti = t.transaction_info;
+      const value = Number.parseFloat(ti.transaction_amount?.value ?? "0");
+      return {
+        date: ti.transaction_initiation_date ?? "",
+        subject: ti.transaction_subject || (value >= 0 ? "Money in" : "Money out"),
+        amount: ti.transaction_amount?.value ?? "0",
+        currency: ti.transaction_amount?.currency_code ?? "USD",
+        status: ti.transaction_status ?? "",
+        balanceAfter: ti.ending_balance?.value ?? null,
+        agentMarker: typeof ti.custom_field === "string" && ti.custom_field.startsWith("cb|") ? ti.custom_field.split("|")[1] ?? null : null,
+        transactionId: ti.transaction_id ?? "",
+      };
+    });
+    res.json({
+      balance: balance ? { value: balance.value, currency: balance.currency_code ?? "USD" } : null,
+      transactions: rows,
+      count: all.length,
+      window: "last 31 days",
+    });
+  } catch (e) {
+    res.status(502).json({ error: `paypal money view failed: ${(e as Error).message}` });
+  }
+});
+
 // SPA fallback: the React app owns every app route (/, /planner, /oversight,
 // /dashboard, /board, /verify/*, /docs, /login). API, vendor files and anything
 // with an extension keep their normal handling above.

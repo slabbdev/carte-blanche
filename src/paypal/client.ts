@@ -276,7 +276,11 @@ export class PayPalClient {
       transaction_info: {
         transaction_id?: string;
         transaction_status?: string;
+        transaction_event_code?: string;
+        transaction_subject?: string;
         transaction_amount?: { currency_code?: string; value?: string };
+        ending_balance?: { currency_code?: string; value?: string };
+        available_balance?: { currency_code?: string; value?: string };
         custom_field?: string;
         transaction_initiation_date?: string;
       };
