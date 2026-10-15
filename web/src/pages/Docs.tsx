@@ -8,7 +8,39 @@ export default function Docs() {
         <h2>Machine-readable</h2>
         <div className="buy-row"><span className="pill paypal">CONTRACT</span><a href="/openapi.json">/openapi.json</a><span className="muted">OpenAPI 3.0 — APIMatic-validated, TypeScript SDK generated from it (see repo sdk/typescript)</span></div>
         <div className="buy-row"><span className="pill paypal">AGENTS</span><a href="/llms.txt">/llms.txt</a><span className="muted">the API map + behavior rules for agents that read before they act</span></div>
-        <div className="buy-row"><span className="pill paypal">MCP</span><span className="mono">npm run mcp</span><span className="muted">the same API as MCP tools (mcp/server.ts in the repo)</span></div>
+        <div className="buy-row"><span className="pill paypal">MCP</span><span className="mono">npm run mcp</span><span className="muted">the same API as MCP tools — connect any MCP client (below)</span></div>
+      </section>
+
+      <section className="card">
+        <h2>MCP server — one config, every agent</h2>
+        <p className="sub">Stdio MCP server over the same API: add it to Claude Desktop, Cursor or any
+        MCP client with this config — the agent then holds the mandate tools directly.</p>
+        <pre className="pack" style={{ maxHeight: 180 }}>{JSON.stringify({
+          mcpServers: {
+            "carte-blanche": {
+              command: "npm",
+              args: ["run", "mcp", "--prefix", "/path/to/carte-blanche"],
+              env: { CB_BASE_URL: "https://carte-blanche-6jgo.onrender.com" },
+            },
+          },
+        }, null, 2)}</pre>
+        <p className="sub" style={{ marginTop: 10 }}>
+          <b>Doctrine for the agent:</b> always pass <code>intent_text</code> — the user's verbatim
+          words that asked for the purchase. They are sealed into the tamper-evident journal and
+          stamped on the receipt: your seller's defense against "I never told my agent to buy that".
+        </p>
+        <h3 style={{ margin: "10px 0 4px" }}>The 14 tools</h3>
+        <div className="buy-row"><span className="mono">healthz</span><span className="muted">rails mode, journal length, catalog source</span></div>
+        <div className="buy-row"><span className="mono">search_catalog</span><span className="muted">Channel3 live products, offers grouped cheapest-first</span></div>
+        <div className="buy-row"><span className="mono">grant_mandate</span><span className="muted">signed spending authority — optional recurrence (standing "$X/month")</span></div>
+        <div className="buy-row"><span className="mono">mandate_status</span><span className="muted">limits, window, recurrence, captured spend — call before spending</span></div>
+        <div className="buy-row"><span className="mono">revoke_mandate</span><span className="muted">instant, journalled — the only way authority ends</span></div>
+        <div className="buy-row"><span className="mono">purchase</span><span className="muted">THE boundary: signed receipt or signed refusal (pass intent_text)</span></div>
+        <div className="buy-row"><span className="mono">my_artifacts</span><span className="muted">your receipts and refusals</span></div>
+        <div className="buy-row"><span className="mono">verify_artifact</span><span className="muted">full verification report: signatures, Merkle proof, chain</span></div>
+        <div className="buy-row"><span className="mono">agent_track_record</span><span className="muted">signed reputation computed from the sealed chain</span></div>
+        <div className="buy-row"><span className="mono">save_preference · recall_preferences</span><span className="muted">journalled memory of the principal's tastes</span></div>
+        <div className="buy-row"><span className="mono">plan_journey · approve_journey · run_journey</span><span className="muted">baskets that derive their own mandate; cycle runs; price-drop re-runs</span></div>
       </section>
 
       <section className="card">
