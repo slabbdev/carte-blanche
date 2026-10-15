@@ -106,6 +106,15 @@
            padding: 14px 16px; box-shadow: var(--shadow); }
   .chart h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 
+  .rc-tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
+  .rc-tab { border: 1px solid var(--border); background: #fff; border-radius: 19px; padding: 8px 16px;
+            font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .rc-tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .rc-tab .mine-count { font-size: 11px; opacity: .85; margin-left: 4px; }
+  .mine-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 0;
+              border-top: 1px solid var(--border); font-size: 13px; }
+  .mine-row .amt { font-weight: 700; white-space: nowrap; }
+  .mine-row .desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .drawer { display: none; margin-top: 22px; background: var(--panel); border: 1px solid var(--border);
             border-radius: 10px; padding: 20px 22px; box-shadow: var(--shadow); }
   .drawer.show { display: block; }
@@ -127,7 +136,7 @@
 
 <div class="topbar">
   <span class="wordmark"><span class="pay">Carte</span><span class="pal">Blanche</span></span>
-  <span class="account"><b id="acctName">seller</b> <span class="rolechip" id="roleChip"></span> <span class="envchip">SANDBOX</span></span>
+  <span class="account"><b id="acctName">paypal account</b> <span class="envchip">SANDBOX</span></span>
   <div class="top-right">
     <span id="livePill"><span class="dot"></span>LIVE</span>
     <button class="ghost" id="signout">Sign out</button>
@@ -141,9 +150,9 @@
     <span class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Activity</span>
     <span class="nav-item active"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>Resolution Center</span>
     <div class="nav-section">INTEGRATIONS</div>
-    <a class="nav-item" data-role="buyer" href="/planner"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>Journey planner</a>
-    <a class="nav-item" data-role="buyer" href="/oversight"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>My agents (oversight)</a>
-    <a class="nav-item" data-role="buyer" href="/"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>PayPal sandbox · agent orders</a>
+    <a class="nav-item" href="/planner"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>Journey planner</a>
+    <a class="nav-item" href="/oversight"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>My agents (oversight)</a>
+    <a class="nav-item" href="/"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>PayPal sandbox · agent orders</a>
     <a class="nav-item" href="/verify"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-5"/><circle cx="12" cy="12" r="9"/></svg>Public verification</a>
     <a class="nav-item" href="/docs"><svg viewBox="0 0 24 24"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12"/></svg>API</a>
     <div class="foot">Integration concept — simulation on sandbox rails. Not an official PayPal product.</div>
@@ -157,11 +166,16 @@
       </header>
       <p class="statusline" id="statusline">loading disputes…</p>
       <p class="sub" style="margin:-14px 0 14px;color:var(--muted);font-size:12.5px">
-      You are logged as the <b>SELLER</b>: this list shows what PayPal's Disputes API holds for your
-      sales. Buyer contestations sealed on <a href="/oversight" data-role="buyer">/oversight</a> land
-      here only once they are filed as PayPal disputes — the seal itself stays in the journal.</p>
+      Like PayPal's own Resolution Center, one list with two faces: cases <b>against your sales</b>
+      (below) and the cases <b>you filed as a buyer</b> (tab above) — including contestations sealed
+      on <a href="/oversight">/oversight</a> before they are filed on PayPal.</p>
 
-      <div class="toolbar">
+      <div class="rc-tabs">
+        <button class="rc-tab active" id="tab-sales">Against my sales</button>
+        <button class="rc-tab" id="tab-mine">Filed by me <span class="mine-count" id="mineCount"></span></button>
+      </div>
+
+      <div class="toolbar" id="salesToolbar">
         <input class="input" id="quickFilter" placeholder="Search disputes…" />
         <button class="ghost" id="refresh">↻ Refresh</button>
         <button class="ghost" id="exportCsv">⬇ CSV</button>
@@ -172,13 +186,22 @@
         <span class="hint" id="toolhint" style="margin:0"></span>
       </div>
 
-      <div id="grid"></div>
-      <div id="calendar" style="display:none"></div>
-      <div class="empty" id="empty" style="display:none">No disputes on file. Make a purchase in the console first (mock mode seeds rows from your receipts).</div>
+      <div id="salesView">
+        <div id="grid"></div>
+        <div id="calendar" style="display:none"></div>
+        <div class="empty" id="empty" style="display:none">No disputes on file. Make a purchase in the console first (mock mode seeds rows from your receipts).</div>
 
-      <div class="charts">
-        <div class="chart"><h3>Disputes by status</h3><div id="chartStatus" style="height:200px"></div></div>
-        <div class="chart"><h3>Amount by reason</h3><div id="chartReason" style="height:200px"></div></div>
+        <div class="charts">
+          <div class="chart"><h3>Disputes by status</h3><div id="chartStatus" style="height:200px"></div></div>
+          <div class="chart"><h3>Amount by reason</h3><div id="chartReason" style="height:200px"></div></div>
+        </div>
+      </div>
+
+      <div id="mineView" style="display:none">
+        <p class="sub" style="margin:0 0 12px">Cases YOU opened as a buyer — sealed on /oversight the moment you contested, each
+        carrying its signed evidence pack. Filing on PayPal's own site turns a seal into a live case;
+        until then the journal is your proof.</p>
+        <div id="mineList"><div class="empty">loading…</div></div>
       </div>
 
       <div class="drawer" id="drawer">
@@ -623,22 +646,5 @@ $("viewGrid").onclick = () => setView("grid");
 
 loadDisputes().catch((e) => { $("statusline").textContent = "error: " + e.message; });
 </script>
-
-// --- role-aware nav (the seat chosen at login drives what's visible) ----------
-(async () => {
-  try {
-    const me = await (await fetch("/api/auth/me")).json();
-    document.querySelectorAll("[data-role]").forEach((el) => {
-      if (el.dataset.role && el.dataset.role !== me.role) el.style.display = "none";
-    });
-    const chip = document.getElementById("roleChip");
-    if (chip) {
-      chip.textContent = me.role === "seller" ? "SELLER · Resolution Center" : "BUYER · my agents";
-      chip.dataset.v = me.role;
-    }
-    const acct = document.getElementById("acctName");
-    if (acct && me.sub) acct.textContent = me.sub;
-  } catch { /* not fatal */ }
-})();
 </script></body>
 </html>

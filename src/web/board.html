@@ -47,8 +47,8 @@
 
 <div class="topbar">
   <a class="wordmark" href="/"><span class="pay">Carte</span><span class="pal">Blanche</span></a>
-  <span class="account"><b id="acctName">seller</b> <span class="rolechip" id="roleChip"></span> <span class="envchip">SANDBOX</span></span>
-  <span style="margin-left:auto;font-size:13px"><a href="/" data-role="buyer">← Console</a><a href="/dashboard">← Resolution Center</a></span>
+  <span class="account"><b id="acctName">paypal account</b> <span class="envchip">SANDBOX</span></span>
+  <span style="margin-left:auto;font-size:13px"><a href="/">← Console</a><a href="/dashboard">← Resolution Center</a><a href="/oversight" style="margin-left:14px">My agents</a></span>
 </div>
 
 <div class="wrap">
@@ -142,23 +142,6 @@ async function main() {
 }
 
 main().catch((e) => { $("statusline").textContent = "error: " + e.message; });
-
-// --- role-aware nav (the seat chosen at login drives what's visible) ----------
-(async () => {
-  try {
-    const me = await (await fetch("/api/auth/me")).json();
-    document.querySelectorAll("[data-role]").forEach((el) => {
-      if (el.dataset.role && el.dataset.role !== me.role) el.style.display = "none";
-    });
-    const chip = document.getElementById("roleChip");
-    if (chip) {
-      chip.textContent = me.role === "seller" ? "SELLER · Resolution Center" : "BUYER · my agents";
-      chip.dataset.v = me.role;
-    }
-    const acct = document.getElementById("acctName");
-    if (acct && me.sub) acct.textContent = me.sub;
-  } catch { /* not fatal */ }
-})();
 </script>
 </body>
 </html>
