@@ -205,8 +205,22 @@ docs-as-code loop against their REST API, including their vendor content-types a
 3. **Two bug reports already in hand**: `/api-entities/import-*` returning bare 500s, and their
    egress fetcher failing on some public URLs.
 
+**The big one — the missing generation is RUNTIME.** APIMatic v2 is already agent-native at
+docs time (portals emit `llms.txt` + per-page Markdown, and **Context Plugins** hand Claude
+Code/Cursor/VS Code the full API context — `apimatic plugin generate`, our scaffold at
+`docs/apimatic/portal/src/apimatic.json`). What the pipeline does not emit yet is the piece that
+lets an agent **call** the API: an MCP server. Today an APIMatic customer gets SDKs + a portal
+where humans read; the agent has to be hand-wired. Our answer, shipped as a working prototype:
+`scripts/apimatic-mcp-gen.mjs` reads the APIMatic-validated spec and emits **23 MCP tools**
+(params from the schemas, auth from the security schemes) — proof that
+**spec → SDK + portal + MCP server** is one pipeline step away. The pitch:
+*"APIMatic: your API, documented AND callable by agents — generated."* Our hand-written
+`mcp/server.ts` (13 tools over a money-moving, evidence-sealing API) is the reference for what
+the generator must produce.
+
 **The ask:** developer-portal workspace connection so the hosted portal URL goes live; review of
-the sync script by their platform team.
+the sync script by their platform team; and 30 minutes of their codegen team on the MCP-generation
+prototype.
 
 ---
 

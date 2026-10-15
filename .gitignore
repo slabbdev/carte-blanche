@@ -10,3 +10,4 @@ coverage/
 pack-*.md
 
 web/node_modules/
+out/

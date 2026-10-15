@@ -1,0 +1,13 @@
+{
+  "plugin": {
+    "pluginId": "carte-blanche",
+    "pluginName": "Carte Blanche",
+    "pluginVersion": "0.1.0",
+    "author": {
+      "name": "slabbdev"
+    },
+    "license": "MIT",
+    "homepage": "https://carte-blanche-6jgo.onrender.com",
+    "repository": "https://github.com/slabbdev/carte-blanche"
+  }
+}
