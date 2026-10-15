@@ -1,6 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadOrCreateKeys } from "./lib/keys.js";
 import { Journal } from "./journal/journal.js";
@@ -75,6 +76,53 @@ app.use(express.json());
 const SESSION_COOKIE = "cb_session";
 const SESSION_TTL_MS = 12 * 3_600_000;
 const sessions = new Map<string, { sub: string; expiresAt: number }>();
+const oidcStates = new Map<string, string>(); // state → next path (anti-CSRF, one-time)
+
+// Sessions + OIDC states survive process death. The free tier SPINS DOWN
+// after 15 idle minutes (that's the OAuth killer: the buyer sits on PayPal's
+// consent page, the instance sleeps, the callback 502s into a dead process).
+// Render's ephemeral storage survives spin-down (only deploys wipe it), so a
+// small JSON file is enough to make logins — and in-flight OAuth hand-offs —
+// survive sleep, cold starts and crashes.
+const WEB_SESSIONS_FILE = path.join(STATE_DIR, "web-sessions.json");
+
+function loadWebSessions(): void {
+  try {
+    const raw = JSON.parse(fs.readFileSync(WEB_SESSIONS_FILE, "utf8")) as {
+      sessions: Array<[string, { sub: string; expiresAt: number }]>;
+      oidcStates: Array<[string, string]>;
+    };
+    const now = Date.now();
+    for (const [token, s] of raw.sessions ?? []) {
+      if (s.expiresAt > now) sessions.set(token, s);
+    }
+    for (const [state, next] of raw.oidcStates ?? []) oidcStates.set(state, next);
+  } catch {
+    /* no file yet — fresh start */
+  }
+}
+
+loadWebSessions();
+
+let persistTimer: NodeJS.Timeout | undefined;
+function persistWebSessions(): void {
+  // debounced: bursts of session writes cost one file write
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = undefined;
+    try {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
+      const cutoff = Date.now();
+      const liveSessions = [...sessions.entries()].filter(([, s]) => s.expiresAt > cutoff);
+      fs.writeFileSync(
+        WEB_SESSIONS_FILE,
+        JSON.stringify({ sessions: liveSessions, oidcStates: [...oidcStates.entries()] }),
+      );
+    } catch {
+      /* persistence is best-effort — the in-memory maps keep serving */
+    }
+  }, 250);
+}
 
 function cookieToken(req: express.Request): string | undefined {
   const raw = (req.headers.cookie ?? "")
@@ -132,6 +180,7 @@ app.post("/api/auth/login", (req, res) => {
   const sub = String(body.sub ?? "sandbox-merchant").slice(0, 64);
   const token = randomBytes(32).toString("hex");
   sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+  persistWebSessions();
   res.setHeader(
     "Set-Cookie",
     `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
@@ -142,6 +191,7 @@ app.post("/api/auth/login", (req, res) => {
 app.post("/api/auth/logout", (req, res) => {
   const token = cookieToken(req);
   if (token) sessions.delete(token);
+  persistWebSessions();
   res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
   res.json({ ok: true });
 });
@@ -1077,8 +1127,6 @@ app.post("/api/catalog/price-sample", (req, res) => {
 // email login stays as the honest fallback (Connect needs the redirect URI
 // registered on the app — developer dashboard, account-side).
 
-const oidcStates = new Map<string, string>(); // state → next path (anti-CSRF, one-time)
-
 const safeNext = (n: unknown): string =>
   typeof n === "string" && n.startsWith("/") && !n.startsWith("//") ? n : "/";
 
@@ -1088,6 +1136,7 @@ app.get("/api/auth/paypal/start", (req, res) => {
   }
   const state = randomBytes(16).toString("hex");
   oidcStates.set(state, safeNext((req.query as { next?: string }).next));
+  persistWebSessions();
   const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
   const redirectUri = `${base}/api/auth/paypal/callback`;
   const envPrefix = process.env.PAYPAL_ENV === "live" ? "www" : "www.sandbox";
@@ -1130,6 +1179,7 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
     const token = randomBytes(32).toString("hex");
     sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+    persistWebSessions();
     res.setHeader(
       "Set-Cookie",
       `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
