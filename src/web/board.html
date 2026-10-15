@@ -51,9 +51,14 @@
   <span style="margin-left:auto;font-size:13px"><a href="/">← Console</a><a href="/dashboard">← Resolution Center</a><a href="/oversight" style="margin-left:14px">My agents</a></span>
 </div>
 
-<div class="wrap">
+<div class="shell">
+  <nav class="sidebar" data-active="rc"></nav>
+  <main class="main">
+    <div class="wrap">
   <p class="statusline" id="statusline">loading disputes…</p>
   <div id="board"></div>
+    </div>
+  </main>
 </div>
 
 <script>
@@ -143,5 +148,6 @@ async function main() {
 
 main().catch((e) => { $("statusline").textContent = "error: " + e.message; });
 </script>
+<script src="/app-chrome.js"></script>
 </body>
 </html>

@@ -104,7 +104,10 @@
   <span style="margin-left:auto;font-size:13px"><a href="/">← Console</a><a href="/dashboard" style="margin-left:14px">← Resolution Center</a><a href="/verify" style="margin-left:14px">Verify</a></span>
 </div>
 
-<div class="wrap">
+<div class="shell">
+  <nav class="sidebar" data-active="planner"></nav>
+  <main class="main">
+    <div class="wrap">
   <header style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
     <h1>Journey planner</h1>
     <span id="sourcePill"></span>
@@ -165,6 +168,8 @@
     <p class="sub">The same lines, as the run sees them — planned, purchased, or refused with the reason.</p>
     <div id="board"></div>
   </section>
+    </div>
+  </main>
 </div>
 
 <script>
@@ -511,5 +516,6 @@ loadPriceWatch().catch(() => {});
 
 refreshJourney().catch(() => {});
 </script>
+<script src="/app-chrome.js"></script>
 </body>
 </html>

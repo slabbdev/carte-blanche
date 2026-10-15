@@ -79,7 +79,10 @@
   <span style="margin-left:auto;font-size:13px"><a href="/">← Console</a><a href="/dashboard" style="margin-left:14px">← Resolution Center</a><a href="/verify" style="margin-left:14px">Verify</a></span>
 </div>
 
-<div class="wrap">
+<div class="shell">
+  <nav class="sidebar" data-active="oversight"></nav>
+  <main class="main">
+    <div class="wrap">
   <header><h1>My agents</h1></header>
   <p class="statusline">The buyer's view: what your agents spent, what they remember about you,
   which walls held — and the switch that ends their authority instantly. Disagree with a purchase?
@@ -100,6 +103,8 @@
     <div class="feed" id="feed"><div class="empty">loading…</div></div>
     <p class="muted" style="font-size:12px;margin:10px 0 0">Verify any artifact at <a href="/verify">/verify</a> — no account needed.</p>
   </section>
+    </div>
+  </main>
 </div>
 
 <script>
@@ -259,5 +264,6 @@ window.stopAgent = async (mandateId) => {
 
 main().catch((e) => { $("agents").innerHTML = '<div class="empty">✗ ' + esc(e.message) + "</div>"; });
 </script>
+<script src="/app-chrome.js"></script>
 </body>
 </html>
