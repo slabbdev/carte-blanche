@@ -39,6 +39,7 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Grid: SSE async transactions, floating + quick filters, pinned column, pagination, row rules, column-state persistence, CSV export, custom renderers, theme API (quartz params) | ✅ Community ceiling reached (verified in v36 types: statusBar/sideBar/excelExport/rowGrouping/rangeSelection are Enterprise) | `/dashboard`, `/planner` |
 | AG Charts (bar ×2) | ✅ | `/dashboard` |
 | Enterprise features | 📋 need a hackathon/startup license | — |
+| **Their official AI skill** (`ag-grid/skills`: ag-dev + ag-update), MCP server (`ag-mcp`), llms.txt + .md agent docs | ✅ **vendored**: `.agents/skills/` installed via `npx skills add ag-grid/skills` — all future grid work runs through their own guidance; we're on their latest (36.2.0, AG Charts 14.2.0) and their roadmap confirms our Community-ceiling read | `.agents/skills/` |
 
 ## Bryntum
 
