@@ -19,7 +19,8 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Their official MCP server (`@paypal/mcp`) | ✅ analyzed | the gap-proof: money-moving tools, zero walls — pairs with ours |
 | AP2 (Intent/Cart/Payment Mandates) | ✅ aligned | `docs/AP2-ALIGNMENT.md` |
 | OAuth client-credentials token cache | ✅ | client |
-| **Not yet used**: Vault + billing agreements (recurring agent spending — tomorrow-product #8: "my agent may spend $50/month at the grocer"), Payouts (an agent that RECEIVES money), WebMCP merchant onboarding | 📋 roadmap | — |
+| **AI-Toolkit** (github.com/paypal/AI-Toolkit): skill + hooks + MCP integration for Claude Code/Codex/Cursor | ✅ analyzed — **their own dev plugin injects "PayPal best practices" into agents; it ships NO enforcement either** — second confirmation of the gap from their own tooling | — |
+| **Not yet used**: Vault + billing agreements (recurring agent spending — tomorrow-product #8: "my agent may spend $50/month at the grocer"), Payouts (an agent that RECEIVES money), WebMCP merchant onboarding, Checkout API (Channel3's own `/checkout` is "coming soon" too — the whole industry is missing it) | 📋 roadmap | — |
 
 ## Render
 
@@ -31,6 +32,7 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Cron jobs (hourly TSA anchor) | 📋 declared (commented — paid starter) | `render.yaml` |
 | Disks (persistent journal) | 📋 documented (paid) | `render.yaml` comment |
 | Preview Environments (PR deploys, free) | 📋 next | — |
+| MCP server / AI surfaces | ✅ checked: no official Render MCP found (docs 404, npm absent) — our Render deep-API usage (deploys/env/cancel) covers what an MCP would expose | — |
 
 ## AG Grid
 
@@ -48,6 +50,7 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Calendar (deadlines timeline, custom renderer, live refresh, stockholm-light) | ✅ | `/dashboard` |
 | TaskBoard ×2 (dispute kanban `/board`, journey execution board `/planner`) | ✅ | one UMD bundle per page (namespace constraint documented) |
 | Scheduler / Gantt / recurring events / drag-drop | 📋 roadmap | — |
+| Custom fields on task records | ✅ (declared via project `fields` — the /board cards carry amount/dates) | `/board` |
 | UMD multi-bundle gotcha | ✅ documented (contribution candidate) | PROGRESSION + proposals |
 
 ## Channel3
@@ -58,7 +61,9 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | **Pagination (`next_page_token`)** | ✅ just wired (API + mapper + script surface) | catalog route |
 | Per-merchant offer comparison, cheapest-first | ✅ | console + planner |
 | Sample fallback (with multi-merchant offers) | ✅ | offline demo path |
-| Product-by-id / other endpoints | 📋 unknown — needs their docs | — |
+| **URL Lookup** (`/v1/lookup` — any retailer product URL → structured product + offers) | ✅ client method shipped (`lookupByUrl`); live probe returned empty with our key tier (documented) | `lookupByUrl()` |
+| **Monetization** (`max_commission_rate` per offer) | ✅ mapped on offers — display/sum potential earnings in planner next | offers mapping |
+| Their own `agents.md` + llms.txt (agent-readable surface, incl. `/checkout` "coming soon") | ✅ mined | — |
 
 ## APIMatic
 
@@ -68,6 +73,7 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Code Generation (`TS_GENERIC_LIB`) + SDK download | ✅ SDK committed | `sdk/typescript/` |
 | Their platform API endpoints/auth (extracted from `@apimatic/sdk`) | ✅ documented | sync script |
 | Developer portal (hosted) / import-via-file | ⚠️ their import endpoint 500s (alpha); portal needs workspace connection | — |
+| Their own AI skills (github.com/apimatic/skills) | ✅ discovered — same pattern as AG Grid's (installable agent skills); candidate install like we did for AG Grid | github.com/apimatic/skills |
 
 ---
 

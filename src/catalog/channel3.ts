@@ -13,6 +13,8 @@ export interface CatalogOffer {
   merchant?: string;
   /** Affiliate buy link for this offer (buy.trychannel3.com). */
   buyUrl?: string;
+  /** Commission rate on this offer (e.g. 0.02 = 2%) — Channel3 monetization. */
+  commissionRate?: number;
 }
 
 export interface CatalogProduct {
@@ -143,6 +145,24 @@ export class Channel3Catalog {
 
   get enabled(): boolean {
     return Boolean(this.apiKey);
+  }
+
+  /** URL lookup: pass any retailer product URL, get the structured product back. */
+  async lookupByUrl(url: string): Promise<CatalogProduct | undefined> {
+    if (!this.enabled) return undefined;
+    try {
+      const { status, json } = await this.transport.post(
+        `${this.baseUrl}/v1/lookup`,
+        { url },
+        this.apiKey as string,
+        this.timeoutMs,
+      );
+      if (status !== 200) return undefined;
+      const raw = (json as { product?: RawProduct }).product ?? (json as unknown as RawProduct);
+      return mapProduct(raw);
+    } catch {
+      return undefined;
+    }
   }
 
   async search(query: string, limit = 6, pageToken?: string): Promise<CatalogResult> {
