@@ -67,6 +67,7 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Surface | Status | Where |
 |---|---|---|
 | Search v1 (query, limit) + real response mapping (price objects, domains, buy links, ratings, cleaned images) | ✅ live key | `src/catalog/channel3.ts` |
+| **Open package for other integrators** | ✅ extracted | `packages/channel3-lite/` — dependency-free client + mapper + tests (`npm test` inside), the real shape documented once so nobody rediscovers the price-object/domain/affiliate edges the hard way |
 | **Pagination (`next_page_token`)** | ✅ just wired (API + mapper + script surface) | catalog route |
 | Per-merchant offer comparison, cheapest-first | ✅ | console + planner |
 | Sample fallback (with multi-merchant offers) | ✅ | offline demo path |

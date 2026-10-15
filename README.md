@@ -52,6 +52,29 @@ signature run into the same walls — over-cap, off-list and over-budget lines c
 refusals right in the grid. API: `POST /api/journeys`, `POST /api/journeys/:id/approve`,
 `POST /api/journeys/:id/run` (in the contract, APIMatic-linted).
 
+## Standing authority: "$40/month at the grocer" (recurring mandates)
+
+Approve a basket with `{"recurrence":"monthly","months":12}` and the SAME signature becomes a
+standing authority — the basket every month for a year, per-month budget = the basket,
+mandate-wide cap = basket × periods. Each window gets its own wall: spend the month's budget and
+the next attempt is refused with `OVER_WINDOW_CAP` (a different, signed answer to "the whole
+mandate is spent" — `OVER_TOTAL_CAP`); the calendar-aware windows (Jan 31 → Feb 28) reset
+automatically, and the spend-per-window is read from the sealed chain — zero recurring state
+outside it. Run each period with `{"cycle":"2026-11"}`: retries within a cycle are idempotent,
+the next month runs fresh, and running next month's cycle *early* is refused. One command:
+
+```bash
+npm run demo:recurring   # one signature, 6 months, 3 walls, every refusal signed
+```
+
+## The buyer's side: sealed contestations
+
+`/oversight` is the buyer tab PayPal's app would grow — every agent purchase with its evidence
+pack one click away, and **🛡️ Dispute**: picking a reason seals the buyer's contestation INTENT
+(reason, receipt, order id) into the journal the moment it forms, so the buyer walks into PayPal's
+Resolution Center carrying signed evidence instead of screenshots. Filing itself stays on PayPal's
+side; the proof-of-what-the-buyer-said-and-when is ours to seal.
+
 ## The Amex pattern, open-sourced
 
 Amex announced the **Intent Intelligence Framework** at TechCrunch Disrupt 2026: the agent

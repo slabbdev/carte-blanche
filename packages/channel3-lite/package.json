@@ -1,0 +1,17 @@
+{
+  "name": "channel3-lite",
+  "version": "0.1.0",
+  "description": "Dependency-free client + real-shape mapper for the Channel3 shopping API (api.trychannel3.com) — 100M+ retail offers, price-comparison ready",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/map.test.mjs"
+  },
+  "keywords": ["channel3", "trychannel3", "shopping", "agents", "price-comparison", "offers"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
