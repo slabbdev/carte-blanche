@@ -166,12 +166,15 @@ export default function Console() {
         method: "POST",
         body: JSON.stringify({ mandate_id: selMandate, amount, currency: "USD", description: desc, ...(payee ? { payee } : {}), funding }),
       });
-      if (out.kind === "receipt") {
+      if (out.error) { setOutcome("✗ " + esc(out.error)); return; }
+      if (out.outcome === "receipt") {
         setOutcome(`<span class="pill ok">RECEIPT</span> <span class="mono">${esc(out.receipt.receiptId)}</span> — order ${esc(out.receipt.orderId)} · <a href="/verify/${esc(out.receipt.receiptId)}">verify →</a>`);
-      } else if (out.kind === "denial") {
+      } else if (out.outcome === "denial") {
         setOutcome(`<span class="pill no">REFUSED</span> [${esc(out.denial.reasonCode)}] ${esc(out.denial.reasonDetail)} — <a href="/verify/${esc(out.denial.denialId)}">signed proof →</a>`);
-      } else {
+      } else if (out.outcome === "pending") {
         setOutcome('<span class="pill warn">PENDING</span> approve in the PayPal popup below.');
+      } else {
+        setOutcome("✗ unexpected response: " + esc(JSON.stringify(out).slice(0, 120)));
       }
       await refreshOutcomes();
     } catch (e: any) { setOutcome("✗ " + esc(e.message)); }
@@ -345,16 +348,20 @@ export default function Console() {
                     method: "POST",
                     body: JSON.stringify({ mandate_id: selMandate, amount, currency: "USD", description: desc, ...(payee ? { payee } : {}), funding: "wallet" }),
                   });
-                  if (out.kind !== "pending") throw new Error("the enforcer did not open an order: " + (out.kind ?? "?"));
+                  if (out.error) throw new Error(out.error);
+                  if (out.outcome === "denial") throw new Error("the enforcer REFUSED this wallet order: " + (out.denial?.reasonCode ?? "") + " — " + (out.denial?.reasonDetail ?? ""));
+                  if (out.outcome !== "pending") throw new Error("the enforcer did not open an order: " + (out.outcome ?? "?"));
                   setWalletPending({ logicalKey: out.logicalKey, orderId: out.orderId });
                   return out.orderId;
                 }}
                 onApprove={async () => {
                   if (!walletPending) return;
-                  const out = await api<any>("/api/agent/purchase/resume", { method: "POST", body: JSON.stringify({ logicalKey: walletPending.logicalKey }) });
-                  if (out.kind === "receipt") {
+                  const out = await api<any>("/api/agent/purchase/resume", { method: "POST", body: JSON.stringify({ logical_key: walletPending.logicalKey }) });
+                  if (out.outcome === "receipt") {
                     setOutcome(`<span class="pill ok">RECEIPT</span> <span class="mono">${esc(out.receipt.receiptId)}</span> — buyer-approved IN PayPal, captured through the enforcer · <a href="/verify/${esc(out.receipt.receiptId)}">verify →</a>`);
                     await refreshOutcomes();
+                  } else {
+                    setOutcome("✗ resume: " + esc(out.error ?? JSON.stringify(out).slice(0, 120)));
                   }
                 }}
                 onError={(err) => setOutcome("✗ PayPal: " + esc(String(err)))}
