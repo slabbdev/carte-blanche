@@ -45,6 +45,12 @@ export default function Console() {
   const [trAgent, setTrAgent] = useState("shopping-agent-1");
   const [trOut, setTrOut] = useState("");
   const [clientId, setClientId] = useState("");
+  const grantRef = useRef<HTMLDivElement>(null);
+  const noMandate = !selMandate;
+  const goGrant = () => {
+    grantRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setOutcome('<span class="pill warn">PICK A MANDATE FIRST</span> — the agent can\'t spend without one. Fill <b>Grant a mandate</b> above, then come back.');
+  };
   const [walletPending, setWalletPending] = useState<{ logicalKey: string; orderId: string } | null>(null);
   const myKeys = useRef<string[]>(myKeyFingerprints());
 
@@ -137,6 +143,7 @@ export default function Console() {
   }
 
   async function attemptPurchase() {
+    if (noMandate) { goGrant(); return; }
     setOutcome('<span class="muted">attempting…</span>');
     try {
       const out = await api<any>("/api/agent/purchase", {
@@ -155,6 +162,11 @@ export default function Console() {
   }
 
   async function runAutopilot() {
+    if (noMandate) { goGrant(); return; }
+    if (!apGoal.trim()) {
+      setOutcome('<span class="pill warn">GIVE THE AGENT A GOAL</span> — what should it shop for? (e.g. mechanical keyboard)');
+      return;
+    }
     setApMode('<span class="pill mock">running…</span>');
     setApOut("");
     try {
@@ -191,7 +203,7 @@ export default function Console() {
       </header>
       <p className="statusline">{statusline}</p>
 
-      <section className="card">
+      <section className="card" ref={grantRef}>
         <h2>Grant a mandate</h2>
         <p className="sub">The human signs the parsed intent: merchant allowlist, max price, total budget. Ed25519 at creation; immutable afterwards — revocation is the only exit.</p>
         <div className="grid2">
@@ -226,6 +238,11 @@ export default function Console() {
       <section className="card">
         <h2>Shop as the agent</h2>
         <p className="sub">Real product search across 100M+ retail offers (Channel3). Compare merchant offers — the cheaper unfamiliar one is exactly how an agent drifts; watch the mandate stop it.</p>
+        {mandates.length === 0 && (
+          <div className="hint" style={{ background: "#fdf3d8", border: "1px solid #f0e0b0", borderRadius: 8, padding: "8px 12px", marginBottom: 12, color: "var(--amber)" }}>
+            <b>No mandates yet</b> — the agent can't spend without one. Fill <b>Grant a mandate</b> above (15 seconds, defaults are fine).
+          </div>
+        )}
         <div className="row" style={{ marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 220 }}><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the catalog… (e.g. mechanical keyboard)" style={{ borderRadius: 19 }} onKeyDown={(e) => e.key === "Enter" && search()} /></div>
           <button className="ghost" onClick={search}>Search</button>
@@ -288,11 +305,11 @@ export default function Console() {
               <option value="wallet">wallet — human approves</option>
             </select>
           </div>
-          <button onClick={attemptPurchase}>Attempt purchase</button>
+          <button onClick={attemptPurchase} disabled={noMandate} title={noMandate ? "pick or grant a mandate first" : ""}>Attempt purchase</button>
         </div>
         <div className="row" style={{ marginTop: 14 }}>
           <input value={apGoal} onChange={(e) => setApGoal(e.target.value)} placeholder="Autopilot goal… (e.g. mechanical keyboard)" style={{ flex: 1, minWidth: 200, borderRadius: 19 }} />
-          <button className="ghost" onClick={runAutopilot}>🤖 Autopilot</button>
+          <button className="ghost" onClick={runAutopilot} disabled={noMandate || !apGoal.trim()} title={noMandate ? "pick or grant a mandate first" : "type a goal for the agent"}>🤖 Autopilot</button>
           <span dangerouslySetInnerHTML={{ __html: apMode }} />
         </div>
         {outcome && <div className="outcome" dangerouslySetInnerHTML={{ __html: outcome }} />}
