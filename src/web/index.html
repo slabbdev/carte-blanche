@@ -447,8 +447,8 @@ $("cat-search").onclick = async () => {
           <span class="from">${esc(p.price ?? "—")} ${esc(p.currency)}</span>
           ${p.offers.length > 1
             ? `<button type="button" class="offers-toggle" data-idx="${idx}">${p.offers.length} merchants ▾</button>`
-            : '<span class="pill mock">1 offer</span>'}
-          <span style="margin-left:auto"><button type="button" class="use-offer" data-idx="${idx}" data-offer="0">Use cheapest</button></span>
+            : ""}
+          <span style="margin-left:auto"><button type="button" class="use-offer" data-idx="${idx}" data-offer="0">${p.offers.length > 1 ? "Use cheapest" : "Select"}</button></span>
         </div>
         ${p.offers.length > 1 ? `
         <div class="offers" id="offers-${idx}">

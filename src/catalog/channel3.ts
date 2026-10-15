@@ -144,6 +144,56 @@ function mapProduct(raw: RawProduct): CatalogProduct | undefined {
   };
 }
 
+const GROUP_STOP = new Set([
+  "console", "ssd", "hdd", "in", "with", "all", "digital", "robot", "edition", "bundle", "kit",
+  "core", "black", "white", "blue", "red", "green", "nova", "pink",
+]);
+
+/**
+ * Group near-identical listings so merchants compete on ONE card — "cheapest"
+ * only means something when there is a contest. Conservative by design: the
+ * group key is the title minus storage sizes, colorways and generic filler
+ * ("xbox series x"), so a Series S never merges with a Series X, but "Series
+ * X", "Series X 1TB SSD" and "Series X 1TB Console in Black" do. The shortest
+ * title wins (it is usually the cleanest), the cheapest offer pins the price.
+ */
+export function groupSimilar(products: CatalogProduct[]): CatalogProduct[] {
+  const keyOf = (t: string) =>
+    t.toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((w) => !/^\d+(\.\d+)?(tb|gb|mb)$/.test(w) && !GROUP_STOP.has(w))
+      .join(" ");
+  const groups = new Map<string, CatalogProduct>();
+  const out: CatalogProduct[] = [];
+  for (const p of products) {
+    const key = keyOf(p.title);
+    const g = groups.get(key);
+    if (!g) {
+      const copy = { ...p, offers: [...p.offers] };
+      groups.set(key, copy);
+      out.push(copy);
+      continue;
+    }
+    for (const o of p.offers) {
+      if (!g.offers.some((x) => x.merchant === o.merchant && x.price === o.price)) g.offers.push(o);
+    }
+    g.offers.sort((a, b) => Number.parseFloat(a.price) - Number.parseFloat(b.price));
+    const best = g.offers[0];
+    if (best) {
+      g.price = best.price;
+      g.currency = best.currency;
+      g.website = best.merchant ?? g.website;
+    }
+    g.image = g.image ?? p.image;
+    g.rating = g.rating ?? p.rating;
+    g.ratingCount = g.ratingCount ?? p.ratingCount;
+    if (p.title.length < g.title.length) g.title = p.title;
+  }
+  return out;
+}
+
 export class Channel3Catalog {
   constructor(
     private readonly apiKey: string | undefined,
@@ -186,9 +236,11 @@ export class Channel3Catalog {
       if (status !== 200) {
         return { source: "sample", products: sampleProducts(query, pageToken), error: `channel3 http ${status}` };
       }
-      const products = (Array.isArray((json as { products?: RawProduct[] }).products) ? (json as { products: RawProduct[] }).products : [])
-        .map(mapProduct)
-        .filter((p): p is CatalogProduct => Boolean(p));
+      const products = groupSimilar(
+        (Array.isArray((json as { products?: RawProduct[] }).products) ? (json as { products: RawProduct[] }).products : [])
+          .map(mapProduct)
+          .filter((p): p is CatalogProduct => Boolean(p)),
+      );
       const next = (json as { next_page_token?: string }).next_page_token;
       return { source: "channel3", products, ...(next ? { nextPageToken: next } : {}) };
     } catch (err) {
