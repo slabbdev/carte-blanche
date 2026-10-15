@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
-import { api } from "../api";
+import { api, esc } from "../api";
 
 const LINKS = [
   { id: "console", href: "/", label: "Agent console", icon: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /></> },
@@ -12,28 +12,57 @@ const LINKS = [
   { id: "docs", href: "/docs", label: "API", icon: <path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12" /> },
 ] as const;
 
+interface Me { sub: string; profile?: { name?: string; givenName?: string; email?: string; payerId?: string; accountType?: string } | null }
+
 export default function Shell() {
   const loc = useLocation();
-  const [me, setMe] = useState<{ sub: string } | null | "anon">(null);
+  const [me, setMe] = useState<Me | null | "anon">(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    api<{ sub: string }>("/api/auth/me").then(setMe).catch(() => setMe("anon"));
+    api<Me>("/api/auth/me").then(setMe).catch(() => setMe("anon"));
   }, [loc.pathname]);
 
   if (me === "anon") return <Navigate to={"/login?next=" + encodeURIComponent(loc.pathname)} replace />;
+
+  const profile = me?.profile;
+  const displayName = profile?.givenName || profile?.name || me?.sub || "…";
+  const typeLabel = profile?.accountType ? profile.accountType.toUpperCase() : "";
 
   return (
     <>
       <div className="topbar">
         <Link className="wordmark" to="/"><span className="pay">Carte</span><span className="pal">Blanche</span></Link>
-        <span className="account"><b>{me ? me.sub : "…"}</b> <span className="envchip">SANDBOX</span></span>
+        <span className="account">
+          <b id="acctName">{displayName}</b>
+          {typeLabel && <span className={"typechip " + (profile?.accountType ?? "")} onClick={() => setOpen((o) => !o)}>{typeLabel}</span>}
+          <span className="envchip">SANDBOX</span>
+        </span>
         <div className="top-right">
           <button className="ghost" id="signout" onClick={async () => {
             try { await api("/api/auth/logout", { method: "POST" }); } catch { /* gone either way */ }
             window.location.href = "/login";
           }}>Sign out</button>
-          <span className="avatar">CB</span>
+          <span className="avatar" onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer" }}>
+            {displayName.slice(0, 2).toUpperCase()}
+          </span>
         </div>
+        {open && me && (
+          <div className="acct-pop" onMouseLeave={() => setOpen(false)}>
+            <div className="acct-line big">{esc(profile?.name || me.sub)}</div>
+            {profile?.email && <div className="acct-line">{esc(profile.email)}</div>}
+            {profile?.payerId && <div className="acct-line mono">payer {esc(profile.payerId)}</div>}
+            <div className="acct-line">
+              <span className={"typechip " + (profile?.accountType ?? "")}>{profile?.accountType?.toUpperCase() || "PAYPAL"}</span>
+              <span className="muted" style={{ fontSize: 11 }}>account</span>
+            </div>
+            <div className="acct-line muted" style={{ fontSize: 10.5 }}>{me.sub}</div>
+            <button className="ghost" style={{ marginTop: 8, width: "100%" }} onClick={async () => {
+              try { await api("/api/auth/logout", { method: "POST" }); } catch { /* gone */ }
+              window.location.href = "/login";
+            }}>Sign out</button>
+          </div>
+        )}
       </div>
       <div className="shell">
         <nav className="sidebar">

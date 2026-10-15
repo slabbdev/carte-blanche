@@ -75,7 +75,11 @@ app.use(express.json());
 // ---------------------------------------------------------------------------
 const SESSION_COOKIE = "cb_session";
 const SESSION_TTL_MS = 12 * 3_600_000;
-const sessions = new Map<string, { sub: string; expiresAt: number }>();
+interface AccountProfile {
+  name?: string; givenName?: string; email?: string; payerId?: string;
+  accountType?: "business" | "personal" | "paypal";
+}
+const sessions = new Map<string, { sub: string; expiresAt: number; profile?: AccountProfile }>();
 const oidcStates = new Map<string, string>(); // state → next path (anti-CSRF, one-time)
 
 // Sessions + OIDC states survive process death. The free tier SPINS DOWN
@@ -89,7 +93,7 @@ const WEB_SESSIONS_FILE = path.join(STATE_DIR, "web-sessions.json");
 function loadWebSessions(): void {
   try {
     const raw = JSON.parse(fs.readFileSync(WEB_SESSIONS_FILE, "utf8")) as {
-      sessions: Array<[string, { sub: string; expiresAt: number }]>;
+      sessions: Array<[string, { sub: string; expiresAt: number; profile?: AccountProfile }]>;
       oidcStates: Array<[string, string]>;
     };
     const now = Date.now();
@@ -132,12 +136,12 @@ function cookieToken(req: express.Request): string | undefined {
   return raw?.slice(SESSION_COOKIE.length + 1);
 }
 
-function sessionOf(req: express.Request): { sub: string } | undefined {
+function sessionOf(req: express.Request): { sub: string; profile?: AccountProfile } | undefined {
   const token = cookieToken(req);
   if (!token) return undefined;
   const session = sessions.get(token);
   if (!session || session.expiresAt < Date.now()) return undefined;
-  return { sub: session.sub };
+  return { sub: session.sub, profile: session.profile };
 }
 
 // One PayPal login opens the whole app — PayPal's own model: the same account
@@ -149,7 +153,7 @@ function sessionOf(req: express.Request): { sub: string } | undefined {
 app.get("/api/auth/me", (req, res) => {
   const session = sessionOf(req);
   if (!session) return res.status(401).json({ error: "no session" });
-  res.json({ sub: session.sub });
+  res.json({ sub: session.sub, profile: session.profile ?? null });
 });
 
 // The BUYER face of the Resolution Center: contestations sealed from
@@ -1236,8 +1240,21 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     const email = typeof ui.data.email === "string" ? ui.data.email : "";
     if (!payerId && !email) return fail("userinfo", "empty profile");
     const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
+    // account type: PayPal's userinfo does not expose it on the base scopes,
+    // but sandbox emails literally end in @business.example.com / @personal.…
+    const accountType =
+      email.includes("business.example") ? "business"
+      : email.includes("personal.example") || email.includes("personal.sandbox")
+        ? "personal" : "paypal";
+    const profile: AccountProfile = {
+      ...(typeof ui.data.name === "string" ? { name: ui.data.name as string } : {}),
+      ...(typeof ui.data.given_name === "string" ? { givenName: ui.data.given_name as string } : {}),
+      ...(email ? { email } : {}),
+      ...(payerId ? { payerId } : {}),
+      accountType,
+    };
     const token = randomBytes(32).toString("hex");
-    sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS });
+    sessions.set(token, { sub, expiresAt: Date.now() + SESSION_TTL_MS, profile });
     persistWebSessions();
     res.setHeader(
       "Set-Cookie",
