@@ -37,6 +37,10 @@ export interface Journey {
   approvedAt?: string;
   /** Set once the journey has been turned into a signed mandate. */
   mandateId?: string;
+  /** Set at approval when the buyer chose a recurring cadence for this basket. */
+  recurrence?: { frequency: "monthly" | "weekly" };
+  /** Cycle keys run so far (e.g. "2026-11"); per-cycle outcomes live in the journal. */
+  cyclesRun?: string[];
 }
 
 export interface JourneyLineInput {
@@ -82,13 +86,33 @@ export function mandateLimitsFrom(j: Journey): {
  * per-line outcomes; the enforcer journals (and signs) each attempt itself.
  * `logicalKey` is derived from the journey + line ids so a re-run replays the
  * same logical purchase instead of spending twice.
+ *
+ * `opts.cycle` re-runs the SAME approved basket in a new period ("2026-11")
+ * under a recurring mandate: cycle-scoped logical keys let the same lines
+ * purchase again next month, while previous cycles' outcomes stay sealed in
+ * the journal. Items reflect the latest cycle only — the chain holds history.
  */
 export async function executeJourney(
   j: Journey,
   journal: Journal,
   enforcer: Enforcer,
+  opts?: { cycle?: string },
 ): Promise<Journey> {
   if (!j.mandateId) throw new Error("journey is not approved yet — no mandate to spend under");
+  const cycle = opts?.cycle?.trim();
+  if (cycle) {
+    if (!/^\d{4}-\d{2}$/.test(cycle)) throw new Error(`invalid cycle key ${JSON.stringify(cycle)} — expected "YYYY-MM"`);
+    if (!(j.cyclesRun ?? []).includes(cycle)) {
+      j.cyclesRun = [...(j.cyclesRun ?? []), cycle];
+      journal.append("journey_cycle_started", { journey_id: j.id, cycle, mandate_id: j.mandateId });
+    }
+    // a fresh period re-attempts every line; per-line status is the latest cycle's view
+    for (const item of j.items) {
+      item.status = "planned";
+      delete item.outcomeId;
+      delete item.detail;
+    }
+  }
   for (const item of j.items) {
     if (item.status !== "planned") continue;
     const amount = lineTotal(item);
@@ -98,10 +122,11 @@ export async function executeJourney(
       currency: j.currency,
       ...(item.merchant ? { payee: item.merchant } : {}),
       description: `[journey ${j.name}] ${item.title}`,
-      logicalKey: `jrn-${j.id}-${item.id}`,
+      logicalKey: cycle ? `jrn-${j.id}-${cycle}-${item.id}` : `jrn-${j.id}-${item.id}`,
     });
     journal.append("journey_line_attempted", {
       journey_id: j.id,
+      ...(cycle ? { cycle } : {}),
       line_id: item.id,
       title: item.title,
       merchant: item.merchant,
@@ -216,19 +241,30 @@ export class JourneyPlanner {
   }
 
   /** Marks the journey as human-approved under the given signed mandate. */
-  markApproved(id: string, mandateId: string): Journey | undefined {
+  markApproved(
+    id: string,
+    mandateId: string,
+    recurrence?: { frequency: "monthly" | "weekly" },
+  ): Journey | undefined {
     const j = this.journeys.get(id);
     if (!j) return undefined;
     j.mandateId = mandateId;
     j.approvedAt = new Date().toISOString();
+    if (recurrence) j.recurrence = recurrence;
     this.persist();
     this.journal.append("journey_approved", {
       journey_id: j.id,
       mandate_id: mandateId,
       total: journeyTotal(j),
       lines: j.items.length,
+      ...(recurrence ? { recurrence: recurrence.frequency } : {}),
     });
     return j;
+  }
+
+  /** Persists in-place mutations done outside planner methods (journey runs). */
+  persistNow(): void {
+    this.persist();
   }
 
   private persist(): void {

@@ -43,18 +43,31 @@ server.tool(
 
 server.tool(
   "grant_mandate",
-  "Grant a signed spending mandate to an agent. Immutable once created: per-transaction cap, total cap, currency, optional payee allowlist, 7-day window. Only revocation changes it afterwards.",
+  "Grant a signed spending mandate to an agent. Immutable once created: per-transaction cap, total cap, currency, optional payee allowlist, optional recurrence (\"$X per month\"), window. Only revocation changes it afterwards.",
   {
     principal: z.string().describe("Who grants the authority (the human)"),
     agent: z.string().describe("Who may act under it (the agent)"),
     purpose: z.string().describe("Human-readable scope, e.g. 'office supplies this week'"),
     currency: z.string().describe("ISO 4217, e.g. USD"),
     max_per_transaction: z.string().describe("Decimal cap per single purchase, e.g. '79.00'"),
-    max_total_spend: z.string().describe("Decimal cumulative cap, e.g. '120.00'"),
+    max_total_spend: z.string().describe("Decimal cumulative cap over the whole window, e.g. '120.00'"),
     payees: z.array(z.string()).optional().describe("Optional allowlist of payee emails/merchant domains"),
+    recurrence_frequency: z.enum(["monthly", "weekly"]).optional().describe("Standing authority: budget resets each period"),
+    recurrence_max_per_window: z.string().optional().describe("Decimal cap per period, e.g. '40.00' (defaults to max_total_spend)"),
   },
   async (a) => ({
-    content: [{ type: "text", text: JSON.stringify(await api("/api/mandates", { method: "POST", body: JSON.stringify(a) }), null, 2) }],
+    content: [{
+      type: "text",
+      text: JSON.stringify(await api("/api/mandates", {
+        method: "POST",
+        body: JSON.stringify({
+          ...a,
+          ...(a.recurrence_frequency
+            ? { recurrence: { frequency: a.recurrence_frequency, max_per_window: a.recurrence_max_per_window } }
+            : {}),
+        }),
+      }), null, 2),
+    }],
   }),
 );
 
@@ -158,19 +171,26 @@ server.tool(
 
 server.tool(
   "approve_journey",
-  "The human challenge for a basket: derives the mandate from the journey and signs it. After this, lines added to the journey still meet the signed walls.",
-  { journey_id: z.string() },
-  async ({ journey_id }) => ({
-    content: [{ type: "text", text: JSON.stringify(await api(`/api/journeys/${encodeURIComponent(journey_id)}/approve`, { method: "POST", body: "{}" }), null, 2) }],
+  "The human challenge for a basket: derives the mandate from the journey and signs it. After this, lines added to the journey still meet the signed walls. Pass recurrence to turn the basket into a STANDING authority (same basket every month/week for N periods, per-period budget = basket).",
+  {
+    journey_id: z.string(),
+    recurrence: z.enum(["monthly", "weekly"]).optional().describe("Recurring cadence for this basket"),
+    months: z.number().optional().describe("Number of periods the standing authority covers (default 12, max 24)"),
+  },
+  async ({ journey_id, recurrence, months }) => ({
+    content: [{ type: "text", text: JSON.stringify(await api(`/api/journeys/${encodeURIComponent(journey_id)}/approve`, { method: "POST", body: JSON.stringify({ ...(recurrence ? { recurrence, months } : {}) }) }), null, 2) }],
   }),
 );
 
 server.tool(
   "run_journey",
-  "Execute every planned line of an approved journey through the enforcer. Returns per-line outcomes: signed receipts for allowed lines, signed refusals for lines hitting a wall.",
-  { journey_id: z.string() },
-  async ({ journey_id }) => ({
-    content: [{ type: "text", text: JSON.stringify(await api(`/api/journeys/${encodeURIComponent(journey_id)}/run`, { method: "POST" }), null, 2) }],
+  "Execute every planned line of an approved journey through the enforcer. Returns per-line outcomes: signed receipts for allowed lines, signed refusals for lines hitting a wall. For a recurring journey, pass cycle (\"YYYY-MM\") to run this period's basket — retries within a cycle are idempotent, the next month runs fresh under the same mandate.",
+  {
+    journey_id: z.string(),
+    cycle: z.string().optional().describe("Period key \"YYYY-MM\" for recurring journeys"),
+  },
+  async ({ journey_id, cycle }) => ({
+    content: [{ type: "text", text: JSON.stringify(await api(`/api/journeys/${encodeURIComponent(journey_id)}/run`, { method: "POST", body: JSON.stringify(cycle ? { cycle } : {}) }), null, 2) }],
   }),
 );
 

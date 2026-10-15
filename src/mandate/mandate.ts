@@ -2,6 +2,18 @@ import { randomUUID } from "node:crypto";
 
 export const MANDATE_VERSION = "cb-mandate/v1" as const;
 
+/**
+ * Recurring spending authority: "up to $X per month at the grocer". The
+ * mandate's window stays the whole authorization horizon (e.g. one year);
+ * the recurrence slices it into weekly/monthly windows, each with its own
+ * cumulative cap on top of the mandate-wide maxTotalSpend.
+ */
+export interface MandateRecurrence {
+  frequency: "weekly" | "monthly";
+  /** Decimal string. Hard cap on cumulative captured spend INSIDE one window. */
+  maxPerWindow: string;
+}
+
 export interface MandateLimits {
   /** ISO 4217 currency code the mandate is denominated in. */
   currency: string;
@@ -11,6 +23,8 @@ export interface MandateLimits {
   maxTotalSpend: string;
   /** When present, purchases are only allowed to these payees (email or merchant id). */
   payees?: string[];
+  /** When present, the authorization horizon is sliced into repeating budgets. */
+  recurrence?: MandateRecurrence;
   /** ISO 8601 instants, inclusive bounds. */
   windowStart: string;
   windowEnd: string;
@@ -104,5 +118,65 @@ export function validateMandate(m: Mandate): string[] {
   if (m.limits.payees !== undefined && !Array.isArray(m.limits.payees)) {
     errors.push("limits.payees must be an array when present");
   }
+  if (m.limits.recurrence !== undefined) {
+    const r = m.limits.recurrence;
+    if (!r || (r.frequency !== "weekly" && r.frequency !== "monthly")) {
+      errors.push('limits.recurrence.frequency must be "weekly" or "monthly"');
+    }
+    try {
+      parseAmount(r.maxPerWindow, m.limits.currency);
+    } catch (e) {
+      errors.push(`limits.recurrence.maxPerWindow: ${(e as Error).message}`);
+    }
+  }
   return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Recurrence windows. Windows are [start + n periods, start + (n+1) periods)
+// anchored on the mandate's windowStart; monthly addition is calendar-aware
+// (Jan 31 + 1 month = Feb 28, not Mar 3), so the "1st of the month" stays the
+// "1st of the month" for the life of the mandate.
+// ---------------------------------------------------------------------------
+
+export interface RecurrenceWindow {
+  /** Zero-based window index within the mandate. */
+  index: number;
+  /** Inclusive start, ms epoch. */
+  startMs: number;
+  /** Exclusive end, ms epoch — clamped by the mandate's windowEnd. */
+  endMs: number;
+}
+
+/** `start + n` periods, calendar-aware for months (day-of-month clamped). */
+export function addPeriodsMs(startMs: number, frequency: "weekly" | "monthly", n: number): number {
+  if (frequency === "weekly") return startMs + n * 7 * 24 * 3_600_000;
+  const d = new Date(startMs);
+  const day = d.getUTCDate();
+  d.setUTCDate(1); // set month first: raw day could overflow into the next month
+  d.setUTCMonth(d.getUTCMonth() + n);
+  const daysInMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, daysInMonth));
+  return d.getTime();
+}
+
+/** The recurrence window containing `atMs`, or undefined when no recurrence / past the horizon. */
+export function recurrenceWindow(limits: MandateLimits, atMs: number): RecurrenceWindow | undefined {
+  const rec = limits.recurrence;
+  if (!rec) return undefined;
+  const start0 = Date.parse(limits.windowStart);
+  const horizon = Date.parse(limits.windowEnd);
+  if (Number.isNaN(start0) || Number.isNaN(horizon)) return undefined;
+  let index = 0;
+  let ws = start0;
+  let we = addPeriodsMs(start0, rec.frequency, 1);
+  // Stepping (not arithmetic) keeps calendar months honest: with clamping,
+  // window boundaries are only recoverable by walking from the anchor.
+  while (atMs >= we && ws < horizon && index < 5200) {
+    index += 1;
+    ws = we;
+    we = addPeriodsMs(start0, rec.frequency, index + 1);
+  }
+  if (ws >= horizon) return undefined;
+  return { index, startMs: ws, endMs: Math.min(we, horizon) };
 }

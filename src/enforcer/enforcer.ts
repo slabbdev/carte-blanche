@@ -5,7 +5,7 @@ import type { Keys } from "../lib/keys.js";
 import type { Journal } from "../journal/journal.js";
 import type { TsaClient } from "../journal/tsa.js";
 import type { MandateStore } from "../mandate/store.js";
-import { formatAmount, parseAmount, type SignedMandate } from "../mandate/mandate.js";
+import { formatAmount, parseAmount, recurrenceWindow, type SignedMandate } from "../mandate/mandate.js";
 import { verifyMandate } from "../mandate/signing.js";
 import type { PaymentRails } from "../paypal/adapter.js";
 import {
@@ -28,6 +28,7 @@ export type DenialReason =
   | "CURRENCY_MISMATCH"
   | "INVALID_AMOUNT"
   | "OVER_PER_TRANSACTION"
+  | "OVER_WINDOW_CAP"
   | "OVER_TOTAL_CAP"
   | "PAYEE_NOT_ALLOWED";
 
@@ -75,6 +76,7 @@ export class Enforcer {
   private readonly memo = new Map<string, Outcome>();
 
   private readonly tsa?: TsaClient;
+  private readonly now: () => number;
 
   constructor(
     private readonly journal: Journal,
@@ -82,9 +84,12 @@ export class Enforcer {
     private readonly rails: PaymentRails,
     private readonly keys: Keys,
     private readonly stateDir: string,
-    options?: { tsa?: TsaClient },
+    options?: { tsa?: TsaClient; now?: () => number },
   ) {
     this.tsa = options?.tsa;
+    // Injectable clock: production uses wall time; tests and the recurring
+    // demo time-travel across mandate windows without sleeping.
+    this.now = options?.now ?? Date.now;
     const state = loadJson<StoredState>(
       `${stateDir}/outcomes.json`,
       { receipts: [], denials: [] },
@@ -134,7 +139,7 @@ export class Enforcer {
         denialId: newDenialId(logicalKey),
         mandateId: req.mandateId,
         logicalKey,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(this.now()).toISOString(),
         requested: {
           amount: req.amount,
           currency: req.currency,
@@ -153,7 +158,7 @@ export class Enforcer {
         requested: { amount: req.amount, currency: req.currency, payee: req.payee },
         reason_code: reasonCode,
         reason_detail: reasonDetail,
-      });
+      }, denial.createdAt);
       this.denials.set(denial.denialId, denial);
       this.persist();
       const signed = this.store.get(req.mandateId);
@@ -174,7 +179,7 @@ export class Enforcer {
     }
 
     const mandate = signed.mandate;
-    const now = Date.now();
+    const now = this.now();
     const start = Date.parse(mandate.limits.windowStart);
     const end = Date.parse(mandate.limits.windowEnd);
     if (now < start) return deny("WINDOW_NOT_OPEN", `window opens at ${mandate.limits.windowStart}`);
@@ -203,6 +208,27 @@ export class Enforcer {
       return deny("PAYEE_NOT_ALLOWED", `${req.payee} is not on the mandate allowlist`);
     }
 
+    // Recurring mandates: the current window's budget is checked before the
+    // mandate-wide cap — "this month's groceries are spent" is a different
+    // answer to the buyer than "the whole mandate is spent".
+    const rec = mandate.limits.recurrence;
+    const win = rec ? recurrenceWindow(mandate.limits, now) : undefined;
+    if (rec && win) {
+      const windowSpent = this.journal.capturedMinorFor(req.mandateId, {
+        fromMs: win.startMs,
+        toMs: win.endMs,
+      });
+      const windowCap = parseAmount(rec.maxPerWindow, mandate.limits.currency);
+      if (windowSpent + amountMinor > windowCap) {
+        const remaining =
+          windowCap > windowSpent ? formatAmount(windowCap - windowSpent, mandate.limits.currency) : "0.00";
+        return deny(
+          "OVER_WINDOW_CAP",
+          `${rec.frequency} window #${win.index} (${new Date(win.startMs).toISOString()} → ${new Date(win.endMs).toISOString()}) cap ${rec.maxPerWindow} would be exceeded (spent this window ${formatAmount(windowSpent, mandate.limits.currency)}, remaining ${remaining})`,
+        );
+      }
+    }
+
     const spent = this.journal.capturedMinorFor(req.mandateId);
     const cap = parseAmount(mandate.limits.maxTotalSpend, mandate.limits.currency);
     if (spent + amountMinor > cap) {
@@ -214,6 +240,7 @@ export class Enforcer {
     }
 
     // --- authorized: journal intent, then execute with deterministic ids ---
+    const at = new Date(now).toISOString();
     this.journal.append("purchase_requested", {
       mandate_id: req.mandateId,
       logical_key: logicalKey,
@@ -222,7 +249,8 @@ export class Enforcer {
       currency: req.currency,
       payee: req.payee,
       description: req.description,
-    });
+      ...(rec && win ? { recurrence_window: { index: win.index, start: new Date(win.startMs).toISOString(), end: new Date(win.endMs).toISOString() } } : {}),
+    }, at);
 
     const createRequestId = `cb-${logicalKey}-cr`;
     const captureRequestId = `cb-${logicalKey}-cp`;
@@ -246,7 +274,7 @@ export class Enforcer {
       order_id: order.id,
       rails_mode: this.rails.mode,
       paypal_request_id: createRequestId,
-    });
+    }, at);
 
     const capture = await this.rails.captureOrder(order.id, captureRequestId);
     // Wallet orders stop here on purpose: the buyer (a human) must approve
@@ -263,7 +291,7 @@ export class Enforcer {
         currency: req.currency,
         rails_mode: this.rails.mode,
         paypal_request_id: captureRequestId,
-      });
+      }, at);
       const outcome: Outcome = {
         kind: "pending",
         logicalKey,
@@ -284,7 +312,7 @@ export class Enforcer {
       currency: req.currency,
       rails_mode: this.rails.mode,
       paypal_request_id: captureRequestId,
-    });
+    }, at);
 
     const receipt: Receipt = {
       receiptId: newReceiptId(logicalKey),
@@ -355,7 +383,7 @@ export class Enforcer {
       currency: String(awaitingData.currency),
       rails_mode: this.rails.mode,
       paypal_request_id: captureRequestId,
-    });
+    }, new Date(this.now()).toISOString());
     const receipt: Receipt = {
       receiptId: newReceiptId(logicalKey),
       mandateId,

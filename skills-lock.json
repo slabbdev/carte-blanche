@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "ag-dev": {
+      "source": "ag-grid/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ag-dev/SKILL.md",
+      "computedHash": "0f4ed62d6e13fdd89c5869d69351b4401c733c060d029e183fc3ececabd83211"
+    },
+    "ag-update": {
+      "source": "ag-grid/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ag-update/SKILL.md",
+      "computedHash": "1f1c55df1b964d58ad3dad7c13a6774748d6e7d1aea7e29245e3a7dc8ca8dcec"
+    },
+    "apimatic-portal": {
+      "source": "apimatic/skills",
+      "sourceType": "github",
+      "skillPath": "skills/apimatic-portal/SKILL.md",
+      "computedHash": "ebdb788454312e5c0e3b5b773ed0f15e5751c8ff7d172f36e168228cca9aadf7"
+    },
+    "apimatic-sdk": {
+      "source": "apimatic/skills",
+      "sourceType": "github",
+      "skillPath": "skills/apimatic-sdk/SKILL.md",
+      "computedHash": "ac6e19745ebd322fd5fee43ecb75481147f2bf74e998dc8c04fa909dcf13b2f1"
+    }
+  }
+}

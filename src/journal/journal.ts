@@ -74,11 +74,18 @@ export class Journal {
     this.load();
   }
 
-  append(type: string, data: unknown): JournalEvent {
+  append(type: string, data: unknown): JournalEvent;
+  /**
+   * Callers with their own authority over time (the enforcer's injectable
+   * clock, for recurring windows and deterministic tests) stamp events at
+   * THEIR now — wall time would misattribute spends across simulated windows.
+   */
+  append(type: string, data: unknown, ts: string): JournalEvent;
+  append(type: string, data: unknown, ts?: string): JournalEvent {
     const prev = this.events[this.events.length - 1];
     const event: JournalEvent = {
       seq: (prev?.seq ?? 0) + 1,
-      ts: new Date().toISOString(),
+      ts: ts ?? new Date().toISOString(),
       type,
       data,
       prevHash: prev?.hash ?? GENESIS_HASH,
@@ -218,10 +225,22 @@ export class Journal {
   }
 
   /** Cumulative captured spend (minor units) for a mandate, from the chain itself. */
-  capturedMinorFor(mandateId: string): bigint {
+  capturedMinorFor(mandateId: string): bigint;
+  /**
+   * Same, restricted to captures whose event timestamp falls in `[fromMs,
+   * toMs)` — this is how a recurring mandate spends "this window's" budget
+   * without any state outside the chain.
+   */
+  capturedMinorFor(mandateId: string, bounds: { fromMs?: number; toMs?: number }): bigint;
+  capturedMinorFor(mandateId: string, bounds?: { fromMs?: number; toMs?: number }): bigint {
     let total = 0n;
     for (const e of this.eventsFor((d) => d.mandate_id === mandateId)) {
       if (e.type !== "order_captured") continue;
+      if (bounds) {
+        const ts = Date.parse(e.ts);
+        if (bounds.fromMs !== undefined && ts < bounds.fromMs) continue;
+        if (bounds.toMs !== undefined && ts >= bounds.toMs) continue;
+      }
       const d = e.data as { amount_minor?: string };
       if (typeof d.amount_minor === "string") total += BigInt(d.amount_minor);
     }

@@ -20,7 +20,16 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | AP2 (Intent/Cart/Payment Mandates) | ✅ aligned | `docs/AP2-ALIGNMENT.md` |
 | OAuth client-credentials token cache | ✅ | client |
 | **AI-Toolkit** (github.com/paypal/AI-Toolkit): skill + hooks + MCP integration for Claude Code/Codex/Cursor | ✅ analyzed — **their own dev plugin injects "PayPal best practices" into agents; it ships NO enforcement either** — second confirmation of the gap from their own tooling | — |
-| **Not yet used**: Vault + billing agreements (recurring agent spending — tomorrow-product #8: "my agent may spend $50/month at the grocer"), Payouts (an agent that RECEIVES money), WebMCP merchant onboarding, Checkout API (Channel3's own `/checkout` is "coming soon" too — the whole industry is missing it) | 📋 roadmap | — |
+| **Not yet used**: Vault + billing agreements (recurring agent spending — tomorrow-product #8), Payouts (an agent that RECEIVES money), WebMCP merchant onboarding, Checkout API (Channel3's own `/checkout` is "coming soon" too — the whole industry is missing it) | 📋 roadmap | — |
+
+> ✅ **tomorrow-product #8 SHIPPED (2026-10-15)** — recurring mandates, no Vault changes needed:
+> `limits.recurrence {frequency, maxPerWindow}` signed into the mandate; new `OVER_WINDOW_CAP` wall
+> (distinct from `OVER_TOTAL_CAP`); spend-per-window read from the sealed chain (zero state outside
+> it); calendar-aware windows (Jan 31 → Feb 28); standing journeys approved once
+> (`{"recurrence":"monthly","months":12}`) and run per period (`{"cycle":"YYYY-MM"}`, retries
+> idempotent per cycle); `npm run demo:recurring` — one signature, six months of authority, every
+> refusal provable. A Vault token would only change the funding instrument; the authority layer
+> above it is done.
 
 ## Render
 

@@ -23,7 +23,8 @@
     "apimatic:sync": "tsx scripts/apimatic-sync.ts",
     "mcp": "tsx mcp/server.ts",
     "tx:label-proof": "tsx scripts/tx-label-proof.ts",
-    "demo:full": "tsx src/agent/demo-full.ts"
+    "demo:full": "tsx src/agent/demo-full.ts",
+    "demo:recurring": "tsx src/agent/demo-recurring.ts"
   },
   "dependencies": {
     "@bryntum/calendar-trial": "^7.3.7",

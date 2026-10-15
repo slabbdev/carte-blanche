@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { loadOrCreateKeys } from "./lib/keys.js";
 import { Journal } from "./journal/journal.js";
 import { MandateStore } from "./mandate/store.js";
-import { newMandateId, validateMandate, type Mandate } from "./mandate/mandate.js";
+import { addPeriodsMs, formatAmount, newMandateId, parseAmount, validateMandate, type Mandate } from "./mandate/mandate.js";
 import { signMandate } from "./mandate/signing.js";
 import { verifyCanonical } from "./lib/sign.js";
 import type { SignedMandate } from "./mandate/mandate.js";
@@ -169,6 +169,8 @@ interface CreateMandateBody {
   max_total_spend?: string;
   payees?: string[];
   window_end?: string;
+  /** Standing authority: slice the window into repeating budgets. */
+  recurrence?: { frequency?: string; max_per_window?: string };
 }
 
 // Two issuance modes. Custodial (default): the server derives and signs the
@@ -199,6 +201,12 @@ app.post("/api/mandates", (req, res) => {
     signing = "client-held-key";
   } else {
     const currency = (body.currency ?? "USD").toUpperCase();
+    const recurrence:
+      | { frequency: "monthly" | "weekly"; maxPerWindow: string }
+      | undefined =
+      body.recurrence && (body.recurrence.frequency === "monthly" || body.recurrence.frequency === "weekly")
+        ? { frequency: body.recurrence.frequency, maxPerWindow: String(body.recurrence.max_per_window ?? body.max_total_spend ?? "0.00") }
+        : undefined;
     const mandate: Mandate = {
       id: newMandateId(),
       version: "cb-mandate/v1",
@@ -210,6 +218,7 @@ app.post("/api/mandates", (req, res) => {
         maxPerTransaction: String(body.max_per_transaction ?? "0.00"),
         maxTotalSpend: String(body.max_total_spend ?? "0.00"),
         payees: Array.isArray(body.payees) && body.payees.length > 0 ? body.payees.map(String) : undefined,
+        ...(recurrence ? { recurrence } : {}),
         windowStart: new Date().toISOString(),
         windowEnd: String(body.window_end ?? new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()),
       },
@@ -300,14 +309,21 @@ app.delete("/api/journeys/:id", (req, res) => {
 // The human challenge: approving a journey derives a mandate from it — payee
 // allowlist from the lines' merchants, per-purchase cap from the priciest
 // line, total cap from the basket — and signs it. Lines added AFTER this
-// point run into the same signed walls as anything else.
+// point run into the same signed walls as anything else. With
+// `{"recurrence":"monthly","months":12}` the SAME basket becomes a standing
+// authority: window stretched to N periods, per-window budget = basket,
+// mandate-wide cap = basket × N ("this basket, every month, for a year").
 app.post("/api/journeys/:id/approve", (req, res) => {
   const j = journeys.get(req.params.id);
   if (!j) return res.status(404).json({ error: "journey not found" });
   if (j.mandateId) return res.status(409).json({ error: "journey already approved", mandateId: j.mandateId });
   if (j.items.length === 0) return res.status(400).json({ error: "nothing to approve — the journey has no lines" });
-  const body = (req.body ?? {}) as { principal?: string; agent?: string };
+  const body = (req.body ?? {}) as { principal?: string; agent?: string; recurrence?: string; months?: number };
+  const recurrence =
+    body.recurrence === "monthly" || body.recurrence === "weekly" ? body.recurrence : undefined;
+  const periods = Math.max(1, Math.min(24, Math.round(Number(body.months) || 12)));
   const limits = mandateLimitsFrom(j);
+  const nowMs = Date.now();
   const mandate: Mandate = {
     id: newMandateId(),
     version: "cb-mandate/v1",
@@ -319,8 +335,19 @@ app.post("/api/journeys/:id/approve", (req, res) => {
       maxPerTransaction: limits.maxPerTransaction,
       maxTotalSpend: limits.maxTotalSpend,
       payees: limits.payees.length > 0 ? limits.payees : undefined,
-      windowStart: new Date().toISOString(),
-      windowEnd: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString(),
+      ...(recurrence
+        ? {
+            recurrence: { frequency: recurrence, maxPerWindow: journeyTotal(j) },
+            maxTotalSpend: formatAmount(
+              parseAmount(journeyTotal(j), j.currency) * BigInt(periods),
+              j.currency,
+            ),
+          }
+        : {}),
+      windowStart: new Date(nowMs).toISOString(),
+      windowEnd: recurrence
+        ? new Date(addPeriodsMs(nowMs, recurrence, periods)).toISOString()
+        : new Date(nowMs + 7 * 24 * 3_600_000).toISOString(),
     },
     issuedAt: new Date().toISOString(),
   };
@@ -329,7 +356,7 @@ app.post("/api/journeys/:id/approve", (req, res) => {
   const signed = signMandate(mandate, keys.server.privateKeyB64, keys.server.publicKeyB64);
   store.put(signed);
   journal.append("mandate_issued", { mandate_id: mandate.id, principal: mandate.principal, agent: mandate.agent });
-  const approved = journeys.markApproved(j.id, mandate.id);
+  const approved = journeys.markApproved(j.id, mandate.id, recurrence ? { frequency: recurrence } : undefined);
   res.json({ ...(approved as typeof j), total: journeyTotal(j), mandate: signed });
 });
 
@@ -439,13 +466,20 @@ app.post("/api/agent/preferences", (req, res) => {
 
 // Run: every still-planned line goes through the enforcer, in order. Off-list
 // merchants and over-budget lines come back as signed refusals right in the
-// grid — the basket meets the same walls as any single purchase.
+// grid — the basket meets the same walls as any single purchase. A recurring
+// journey re-runs per period: `{"cycle": "2026-11"}` re-attempts every line
+// with cycle-scoped logical keys under the same recurring mandate.
 app.post("/api/journeys/:id/run", async (req, res) => {
   const j = journeys.get(req.params.id);
   if (!j) return res.status(404).json({ error: "journey not found" });
   if (!j.mandateId) return res.status(409).json({ error: "approve the journey first — there is no mandate to spend under" });
+  const cycle = (req.body as { cycle?: string } | undefined)?.cycle?.trim();
+  if (cycle && !/^\d{4}-\d{2}$/.test(cycle)) {
+    return res.status(400).json({ error: 'cycle must look like "YYYY-MM"' });
+  }
   try {
-    const after = await executeJourney(j, journal, enforcer);
+    const after = await executeJourney(j, journal, enforcer, cycle ? { cycle } : undefined);
+    journeys.persistNow();
     res.json({ ...after, total: journeyTotal(after) });
   } catch (e) {
     res.status(502).json({ error: `journey execution failed: ${(e as Error).message}` });

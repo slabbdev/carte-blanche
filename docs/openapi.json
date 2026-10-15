@@ -700,6 +700,38 @@
           "409": {
             "description": "Already approved."
           }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "principal": {
+                    "type": "string"
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "recurrence": {
+                    "type": "string",
+                    "enum": [
+                      "monthly",
+                      "weekly"
+                    ],
+                    "description": "Sign the basket as a STANDING authority: per-period budget = basket, mandate-wide cap = basket x periods, window stretched to N periods."
+                  },
+                  "months": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24,
+                    "description": "Number of periods (default 12)."
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -709,7 +741,7 @@
           "agent"
         ],
         "summary": "Run a journey: execute every planned line through the enforcer",
-        "description": "Each line is a purchase under the derived mandate. Off-list merchants and over-budget lines come back as signed refusals in the journey itself; receipts and refusals are journalled and publicly verifiable.",
+        "description": "Each line is a purchase under the derived mandate. Off-list merchants and over-budget lines come back as signed refusals in the journey itself; receipts and refusals are journalled and publicly verifiable. With a cycle key, the same approved basket re-runs for that period under a recurring mandate.",
         "operationId": "runJourney",
         "parameters": [
           {
@@ -730,6 +762,23 @@
           },
           "409": {
             "description": "Journey not approved."
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cycle": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$",
+                    "description": "Recurring run: period key \"YYYY-MM\". Re-attempts every line with cycle-scoped logical keys — retries within a cycle are idempotent, the next period runs fresh under the same mandate."
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -843,6 +892,26 @@
             "type": "string",
             "format": "date-time",
             "description": "Window opens at issuance"
+          },
+          "recurrence": {
+            "type": "object",
+            "description": "Standing authority: slice the window into repeating budgets ('up to $X per month'). Each period gets its own cumulative cap; a new period resets automatically. Spend accounting reads the sealed chain.",
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "enum": [
+                  "monthly",
+                  "weekly"
+                ]
+              },
+              "max_per_window": {
+                "type": "string",
+                "description": "Decimal per-period cap, e.g. \"40.00\" (defaults to max_total_spend)"
+              }
+            },
+            "required": [
+              "frequency"
+            ]
           }
         }
       },
