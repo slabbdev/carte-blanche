@@ -35,7 +35,10 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
     <>
       <div className="bo-topbar">
         <button className="bo-burger" aria-label="menu" onClick={() => setOpen((o) => !o)}><span /><span /><span /></button>
-        <Link className="wordmark" to="/" style={{ fontSize: 20 }}><span className="pay">Carte</span><span className="pal">Blanche</span></Link>
+        <Link className="wordmark-wrap" to="/" style={{ textDecoration: "none" }}>
+          <span className="wordmark" style={{ fontSize: 20 }}><span className="pay">Carte</span><span className="pal">Blanche</span></span>
+          <span className="forpp">for PayPal</span>
+        </Link>
         <span className="bo-store">{profile?.name || "Demo Store"}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 18 }}>
           <Link className="bo-devlink" to="/docs"><span>Developpeur</span><span style={{ background: "var(--red)", color: "#fff", borderRadius: 999, minWidth: 17, height: 17, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>0</span></Link>

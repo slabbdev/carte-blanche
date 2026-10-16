@@ -17,7 +17,10 @@ export default function Login() {
 
   return (
     <div className="login-body">
-      <div className="wordmark"><span className="pay">Carte</span><span className="pal">Blanche</span></div>
+      <div className="wordmark" style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1 }}>
+        <span><span className="pay">Carte</span><span className="pal">Blanche</span></span>
+        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.6, textTransform: "uppercase", color: "var(--blue)", marginTop: 5 }}>for PayPal</span>
+      </div>
       <div className="login-card">
         <h1>Log in</h1>
         <p className="sub">

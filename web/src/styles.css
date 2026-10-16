@@ -21,6 +21,8 @@ h3 { font-size: 13px; margin: 0 0 8px; font-weight: 700; }
           border-bottom: 1px solid var(--border); display: flex; align-items: center;
           gap: 20px; padding: 0 24px; }
 .wordmark { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; user-select: none; }
+.wordmark-wrap { display: flex; flex-direction: column; line-height: 1; text-decoration: none; }
+.wordmark-wrap .forpp { font-size: 9px; font-weight: 700; letter-spacing: 2.6px; text-transform: uppercase; color: var(--blue); margin-top: 3px; user-select: none; }
 .wordmark .pay { color: var(--navy); }
 .wordmark .pal { color: var(--blue); }
 .account { display: flex; align-items: center; gap: 10px; padding-left: 20px;
