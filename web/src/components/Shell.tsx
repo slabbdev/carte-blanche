@@ -33,25 +33,17 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
 
   return (
     <>
-      <div className="topbar">
-        <Link className="wordmark" to="/"><span className="pay">Carte</span><span className="pal">Blanche</span></Link>
-        <span className="account">
-          <b id="acctName">{displayName}</b>
-          {typeLabel && <span className={"typechip " + (profile?.accountType ?? "")} onClick={() => setOpen((o) => !o)}>{typeLabel}</span>}
+      <div className="bo-topbar">
+        <button className="bo-burger" aria-label="menu" onClick={() => setOpen((o) => !o)}><span /><span /><span /></button>
+        <Link className="wordmark" to="/" style={{ fontSize: 20 }}><span className="pay">Carte</span><span className="pal">Blanche</span></Link>
+        <span className="bo-store">{profile?.name || "Demo Store"}</span>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 18 }}>
+          <Link className="bo-devlink" to="/docs"><span>Developpeur</span><span style={{ background: "var(--red)", color: "#fff", borderRadius: 999, minWidth: 17, height: 17, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>0</span></Link>
           <span className="envchip">SANDBOX</span>
-        </span>
-        <div className="top-right">
+          {typeLabel && <span className={"typechip " + (profile?.accountType ?? "")}>{typeLabel}</span>}
           {me === "anon"
-            ? <Link className="ghost" style={{ display: "inline-flex", alignItems: "center", borderRadius: 19, padding: "8px 16px", fontSize: 13.5, background: "#fff", border: "1px solid #c8cdd6", color: "var(--text)", fontWeight: 600 }} to="/login">Log in</Link>
-            : <>
-              <button className="ghost" id="signout" onClick={async () => {
-                try { await api("/api/auth/logout", { method: "POST" }); } catch { /* gone either way */ }
-                window.location.href = "/login";
-              }}>Sign out</button>
-              <span className="avatar" onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer" }}>
-                {displayName.slice(0, 2).toUpperCase()}
-              </span>
-            </>}
+            ? <Link className="bo-gdbtn-white" to="/login">Log in</Link>
+            : <span className="avatar" onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer" }}>{displayName.slice(0, 2).toUpperCase()}</span>}
         </div>
         {open && me && me !== "anon" && (
           <div className="acct-pop" onMouseLeave={() => setOpen(false)}>
@@ -71,18 +63,20 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
         )}
       </div>
       <div className="shell">
-        <nav className="sidebar">
+        <nav className="sidebar bo-sidebar">
+          <Link className="bo-create" to="/planner"><span style={{ fontSize: 15 }}>+</span> Create</Link>
           {LINKS.map((l: any) =>
             l.section ? (
-              <div className="nav-section" key={l.section}>{l.section}</div>
+              <div className="bo-sectiontitle" style={{ margin: "14px 0 4px", fontSize: 11 }} key={l.section}>{l.section}</div>
             ) : (
-              <Link key={l.id} className={"nav-item" + (loc.pathname === l.href ? " active" : "")} to={l.href}>
+              <Link key={l.id} className={"bo-navitem" + (loc.pathname === l.href ? " active" : "")} to={l.href}>
                 <svg viewBox="0 0 24 24">{l.icon}</svg>
                 {l.label}
+                <span className="chev">›</span>
               </Link>
             ),
           )}
-          <div className="foot">Integration concept — simulation on sandbox rails. Not an official PayPal product.</div>
+          <div className="foot">Integration concept — simulation on sandbox rails.<br />Not an official PayPal product.</div>
         </nav>
         <main className="main">
           <div className="content">

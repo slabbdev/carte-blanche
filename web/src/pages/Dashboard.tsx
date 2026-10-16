@@ -295,6 +295,20 @@ export default function Dashboard() {
             <div className="chart"><h3>Disputes by status</h3><div ref={chartRefs.status} style={{ height: 200 }} /></div>
             <div className="chart"><h3>Amount by reason</h3><div ref={chartRefs.reason} style={{ height: 200 }} /></div>
           </div>
+
+          <div className="bo-programs">
+            <div className="cell">
+              <h3>Frais, niveaux et programmes</h3>
+              <a href="https://www.paypal.com/us/brc/article/merchant-protection" target="_blank" rel="noopener">🛡️ Protection des Marchands PayPal</a>
+              <a href="https://www.paypal.com/us/cshelp/article/chargeback-protection-help502" target="_blank" rel="noopener">🏦 Outil de Protection contre les oppositions bancaires</a>
+            </div>
+            <div className="cell">
+              <h3>Nous sommes là pour vous aider</h3>
+              <a href="/docs">📖 La même API, documentée pour les agents</a>
+              <a href="/verify">🔍 Vérification publique des preuves</a>
+              <a href="/oversight">👁 Le point de vue de l'acheteur</a>
+            </div>
+          </div>
         </>
       ) : (
         <MineList />

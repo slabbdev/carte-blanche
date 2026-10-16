@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
+import { Link } from "react-router-dom";
 import { api, esc } from "../api";
 import { myKeyFingerprints, sha256Hex, signMandateInBrowser } from "../lib/noncustodial";
 
@@ -83,7 +84,21 @@ export default function Console() {
       ...data.denials.map((d) => ({ t: "denial", o: d })),
     ].sort((a, b) => (a.o.createdAt < b.o.createdAt ? 1 : -1)));
   }
+  const [perf, setPerf] = useState({ inflow: "—", outflow: "—", cur: "" });
   useEffect(() => { refreshMandates().catch(() => {}); refreshOutcomes().catch(() => {}); }, []);
+  useEffect(() => {
+    api<any>("/api/paypal/money").then((d) => {
+      setMoney(d);
+      let inflow = 0, outflow = 0, cur = "";
+      for (const t of d.transactions ?? []) {
+        const v = Number(t.amount);
+        if (!Number.isFinite(v)) continue;
+        cur = cur || t.currency;
+        if (v >= 0) inflow += v; else outflow += -v;
+      }
+      setPerf({ inflow: inflow.toFixed(2), outflow: outflow.toFixed(2), cur });
+    }).catch(() => setMoney({ transactions: [], count: 0 }));
+  }, []);
 
   async function grant() {
     try {
@@ -216,7 +231,55 @@ export default function Console() {
 
   return (
     <>
-      <header className="page">
+      <div className="bo-hero">
+        <div className="bo-balance">
+          {money?.balance ? money.balance.value : "—"}
+          <span className="cur">{money?.balance?.currency ?? "EUR"}</span>
+        </div>
+        <div className="bo-ballabel">Solde disponible — merchant sandbox account</div>
+        <span className="bo-manage">Gérer mon argent</span>
+      </div>
+      <div className="bo-sectiontitle">Accès rapide</div>
+      <div className="bo-quick">
+        <Link to="/planner"><span className="qi">🛒</span>Shopping agent</Link>
+        <Link to="/oversight"><span className="qi">👁</span>Mes agents</Link>
+        <Link to="/dashboard"><span className="qi">🛡️</span>Litiges</Link>
+        <Link to="/verify"><span className="qi">🔗</span>Vérification</Link>
+        <Link to="/docs"><span className="qi">⚙️</span>API / MCP</Link>
+        <a href="/llms.txt"><span className="qi">📄</span>llms.txt</a>
+      </div>
+      <div className="bo-sectiontitle">Performance de l'entreprise</div>
+      <div className="bo-perf">
+        <div className="cell"><div className="k">Volume total des ventes</div><div className="v">{perf.inflow} {perf.cur}</div><div className="delta">captures des agents, 31 jours</div></div>
+        <div className="cell"><div className="k">Remboursements</div><div className="v">{perf.outflow} {perf.cur}</div><div className="delta">protection prix + fast lane</div></div>
+        <div className="cell"><div className="k">Mandats actifs</div><div className="v">{mandates.filter((m) => !m.revoked).length}</div><div className="delta">autorisations signées en cours</div></div>
+        <div className="cell"><div className="k">Murs qui ont tenu</div><div className="v">{outcomes.filter((o) => o.t === "denial").length}</div><div className="delta">refus signés</div></div>
+      </div>
+      <div className="bo-sectiontitle">Activité récente</div>
+      <div className="bo-card" style={{ padding: "4px 8px" }}>
+        <table className="bo-table">
+          <thead><tr><th>Date</th><th>Type</th><th>Nom</th><th>État</th><th>Montant</th><th>Solde après</th></tr></thead>
+          <tbody>
+          {(money?.transactions ?? []).slice(0, 8).map((r: any, i: number) => (
+            <tr key={i}>
+              <td>{esc(String(r.date).replace("T", " ").slice(0, 16))}</td>
+              <td>{Number(r.amount) >= 0 ? "Paiement de" : "Remboursement à"}</td>
+              <td>{r.agentMarker ? `🤖 ${esc(String(r.agentMarker).replace("agent=", ""))}` : esc(r.subject.slice(0, 28))}</td>
+              <td><span className="bo-done">Terminé</span></td>
+              <td style={{ fontWeight: 700, color: Number(r.amount) >= 0 ? "var(--green)" : "var(--red)" }}>{Number(r.amount) >= 0 ? "+" : ""}{esc(r.amount)} {esc(r.currency)}</td>
+              <td className="muted">{esc(String(r.balanceAfter ?? "—"))}</td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="bo-footer">
+        <a href="/docs">API</a><a href="/llms.txt">llms.txt</a><a href="/openapi.json">openapi.json</a><a href="/verify">Vérification publique</a>
+        <span className="lang">Français · English</span>
+        <span>Integration concept — simulation on sandbox rails. Not an official PayPal product.</span>
+      </div>
+
+      <header className="page" style={{ marginTop: 30 }}>
         <h1>Agent spending</h1>
         <span dangerouslySetInnerHTML={{ __html: railsPill }} />
       </header>
