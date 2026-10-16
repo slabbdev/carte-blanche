@@ -1246,20 +1246,34 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
       return fail("exchange", `tokenservice ${tok.status}: usually the redirect URI is not registered on the app, or the Connect feature is not enabled (developer dashboard) — raw: ${JSON.stringify(tok.data ?? {}).slice(0, 120)}`);
     }
     const ui = await paypal.oidcUserinfo(accessToken);
-    if (!ui.ok) return fail("userinfo", `userinfo ${ui.status}: ${JSON.stringify(ui.data ?? {}).slice(0, 120)}`);
-    const payerId = String(ui.data.payer_id ?? ui.data.user_id ?? "");
-    const email = typeof ui.data.email === "string" ? ui.data.email : "";
-    if (!payerId && !email) return fail("userinfo", "empty profile");
-    const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
-    // account type: PayPal's userinfo does not expose it on the base scopes,
-    // but sandbox emails literally end in @business.example.com / @personal.…
+    // Fallback: sandbox business accounts often have an EMPTY profile, and
+    // PayPal's userinfo answers 400 "Unable to fetch details" for them. The
+    // OIDC id_token from the same exchange carries the claims anyway.
+    let claims: Record<string, unknown> = {};
+    const idToken = (tok.data as { id_token?: string } | undefined)?.id_token;
+    if (idToken) {
+      try {
+        claims = JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString("utf8")) as Record<string, unknown>;
+      } catch { /* malformed id_token — userinfo result stands */ }
+    }
+    const src = ui.ok && Object.keys(ui.data ?? {}).length ? ui.data : claims;
+    const payerId = String(src.payer_id ?? src.user_id ?? "");
+    const email = typeof src.email === "string" ? src.email : "";
+    const name = typeof src.name === "string" ? src.name : undefined;
+    const givenName = typeof src.given_name === "string" ? src.given_name : undefined;
+    if (!payerId && !email) {
+      return fail("userinfo", `userinfo ${ui.status}: ${JSON.stringify(ui.data ?? {}).slice(0, 120)} — and no id_token claims; fill the sandbox account's profile (business name, address) on sandbox.paypal.com and retry`);
+    }
     const accountType =
-      email.includes("business.example") ? "business"
-      : email.includes("personal.example") || email.includes("personal.sandbox")
-        ? "personal" : "paypal";
+      (typeof claims.account_type === "string" && claims.account_type.toUpperCase().includes("BUSINESS")) ? "business"
+      : (typeof claims.account_type === "string" && claims.account_type.toUpperCase().includes("PERSONAL")) ? "personal"
+      : email.includes("business.example") ? "business"
+      : email.includes("personal.example") || email.includes("personal.sandbox") ? "personal"
+      : "paypal";
+    const sub = payerId ? `paypal:${payerId}` : `paypal:${email.split("@")[0]}`;
     const profile: AccountProfile = {
-      ...(typeof ui.data.name === "string" ? { name: ui.data.name as string } : {}),
-      ...(typeof ui.data.given_name === "string" ? { givenName: ui.data.given_name as string } : {}),
+      ...(name ? { name } : {}),
+      ...(givenName ? { givenName } : {}),
       ...(email ? { email } : {}),
       ...(payerId ? { payerId } : {}),
       accountType,
@@ -1274,8 +1288,10 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     // Minimization: the journal proves WHO logged in without archiving the email.
     journal.append("paypal_login", {
       sub,
+      account_type: accountType,
+      via: ui.ok && Object.keys(ui.data ?? {}).length ? "userinfo" : "id_token",
       email_domain: email.includes("@") ? email.split("@")[1] : undefined,
-      name_given: typeof ui.data.given_name === "string" ? (ui.data.given_name as string).slice(0, 40) : undefined,
+      name_given: typeof givenName === "string" ? givenName.slice(0, 40) : undefined,
       oidc: true,
     });
     return res.redirect(nextPath ?? "/");

@@ -202,7 +202,7 @@ export class PayPalClient {
   async oidcTokenExchange(args: {
     code: string;
     redirectUri: string;
-  }): Promise<PayPalResponse<{ access_token?: string; refresh_token?: string; openid?: string }>> {
+  }): Promise<PayPalResponse<{ access_token?: string; refresh_token?: string; id_token?: string; openid?: string }>> {
     const basic = Buffer.from(`${this.cfg.clientId}:${this.cfg.clientSecret}`).toString("base64");
     const body = new URLSearchParams({
       grant_type: "authorization_code",
@@ -219,9 +219,9 @@ export class PayPalClient {
       body: body.toString(),
     });
     const raw = await res.text();
-    let data: { access_token?: string } = {};
+    let data: { access_token?: string; id_token?: string } = {};
     try {
-      data = raw.trim() ? (JSON.parse(raw) as { access_token?: string }) : {};
+      data = raw.trim() ? (JSON.parse(raw) as { access_token?: string; id_token?: string }) : {};
     } catch {
       data = {}; // non-JSON (edge error page) — the caller sees ok:false
     }
