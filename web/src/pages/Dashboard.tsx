@@ -36,6 +36,12 @@ export default function Dashboard() {
   const [dHint, setDHint] = useState("");
   const [toolHint, setToolHint] = useState("");
   const [quick, setQuick] = useState("");
+  const [rules, setRules] = useState<any[] | null>(null);
+  const [ruleName, setRuleName] = useState("");
+  const [ruleReasons, setRuleReasons] = useState("");
+  const [ruleMax, setRuleMax] = useState("");
+  const [ruleAction, setRuleAction] = useState("auto_refund");
+  const [rulesHint, setRulesHint] = useState("");
   const gridApi = useRef<any>(null);
   const chartRefs = { status: useRef<HTMLDivElement>(null), reason: useRef<HTMLDivElement>(null) };
   const calDiv = useRef<HTMLDivElement>(null);
@@ -52,7 +58,40 @@ export default function Dashboard() {
     } catch (e: any) { setStatusline("error: " + e.message); }
     api("/api/my/contestations").then((d: any) => setMineCount((d.contestations ?? []).length)).catch(() => {});
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); api("/api/disputes/rules").then((d: any) => setRules(d.rules ?? [])).catch(() => setRules([])); }, []);
+
+  async function createRule() {
+    if (!ruleName.trim()) { setRulesHint("give the rule a name"); return; }
+    const reasons = ruleReasons.split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
+    try {
+      await api("/api/disputes/rules", { method: "POST", body: JSON.stringify({
+        name: ruleName.trim(), reasons,
+        maxAmount: ruleMax.trim() && !Number.isNaN(Number(ruleMax)) ? Number(ruleMax) : undefined,
+        requireMandate: true, action: ruleAction,
+      }) });
+      setRuleName(""); setRuleReasons(""); setRuleMax("");
+      setRulesHint("✓ rule created — it fires on Evaluate now and on every new dispute webhook");
+      api("/api/disputes/rules").then((d: any) => setRules(d.rules ?? [])).catch(() => {});
+    } catch (e: any) { setRulesHint("✗ " + e.message); }
+  }
+  async function toggleRule(id: string, active: boolean) {
+    await api(`/api/disputes/rules/${encodeURIComponent(id)}/toggle`, { method: "POST", body: JSON.stringify({ active }) }).catch(() => {});
+    api("/api/disputes/rules").then((d: any) => setRules(d.rules ?? [])).catch(() => {});
+  }
+  async function deleteRule(id: string) {
+    await api(`/api/disputes/rules/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+    api("/api/disputes/rules").then((d: any) => setRules(d.rules ?? [])).catch(() => {});
+  }
+  async function evaluateRules() {
+    setRulesHint("evaluating rules against current disputes…");
+    try {
+      const r = await api<{ evaluated: number; actions: any[] }>("/api/disputes/rules/evaluate", { method: "POST" });
+      setRulesHint(r.actions.length
+        ? r.actions.map((a: any) => `${a.dispute}: ${a.action}${a.refundId ? " (refund " + a.refundId + ")" : a.simulated ? " (simulated on mock)" : a.error ? " ✗ " + a.error : ""}`).join(" · ")
+        : `evaluated ${r.evaluated} dispute(s) — no rule matched`);
+      await load();
+    } catch (e: any) { setRulesHint("✗ " + e.message); }
+  }
 
   // charts
   useEffect(() => {
@@ -178,6 +217,44 @@ export default function Dashboard() {
         and the cases <b>you filed as a buyer</b> (tab) — including contestations sealed on <a href="/oversight">/oversight</a>
         {" "}before they are filed on PayPal.
       </p>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+          <h2>Automation rules</h2>
+          <span className="pill paypal">COVERAGE-AWARE</span>
+          <span style={{ marginLeft: "auto" }}>
+            <button className="ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={evaluateRules}>⚡ Evaluate now</button>
+          </span>
+        </div>
+        <p className="sub" style={{ margin: "4px 0 10px" }}>Like PayPal's "Automatisez vos résolutions" — but the rules read the
+        coverage before acting: an auto_refund rule never settles a case the signed mandate would win.</p>
+        <div id="rules-list">
+          {(rules ?? []).length === 0 ? <div className="empty">no rules — create one below (e.g. auto-refund ITEM_NOT_RECEIVED under €50)</div> : (rules ?? []).map((r: any) => (
+            <div className="buy-row" key={r.id}>
+              <span className={"pill " + (r.active ? "ok" : "mock")}>{r.active ? "ACTIVE" : "OFF"}</span>
+              <b>{esc(r.name)}</b>
+              <span className="muted">{(r.reasons ?? []).length ? esc(r.reasons.join(", ")) : "any reason"}</span>
+              {r.maxAmount !== undefined && <span className="muted">≤ {esc(String(r.maxAmount))}</span>}
+              <span className={"pill " + (r.action === "auto_refund" ? "ok" : "warn")}>{esc(r.action)}</span>
+              <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                <button className="ghost" style={{ padding: "3px 10px", fontSize: 11.5 }} onClick={() => toggleRule(r.id, !r.active)}>{r.active ? "pause" : "activate"}</button>
+                <button className="danger" style={{ padding: "3px 10px", fontSize: 11.5 }} onClick={() => deleteRule(r.id)}>delete</button>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="row" style={{ marginTop: 10 }}>
+          <input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="rule name" style={{ width: 160 }} />
+          <input value={ruleReasons} onChange={(e) => setRuleReasons(e.target.value)} placeholder="reasons, comma-separated (empty = any)" style={{ flex: 1, minWidth: 200 }} />
+          <input value={ruleMax} onChange={(e) => setRuleMax(e.target.value)} placeholder="max amount" style={{ width: 110 }} />
+          <select value={ruleAction} onChange={(e) => setRuleAction(e.target.value)} style={{ width: 140 }}>
+            <option value="auto_refund">auto refund</option>
+            <option value="auto_reject">flag for fight</option>
+          </select>
+          <button className="ghost" onClick={createRule}>Create rule</button>
+        </div>
+        {rulesHint && <div className="hint" style={{ marginTop: 6 }}>{rulesHint}</div>}
+      </div>
 
       <div className="rc-tabs">
         <button className={"rc-tab" + (tab === "sales" ? " active" : "")} onClick={() => setTab("sales")}>Against my sales</button>

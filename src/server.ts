@@ -14,6 +14,7 @@ import { makeRails, makePayPalClient } from "./paypal/adapter.js";
 import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
+import { DisputeRuleStore } from "./disputes/rules.js";
 import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from "./journey/journey.js";
 import { PreferenceStore } from "./agent/preferences.js";
 import { TrackRecordService } from "./agent/trackrecord.js";
@@ -53,6 +54,7 @@ const disputes = new DisputeService({
 // Purchase journeys: planned baskets that derive their own signed mandate and
 // execute line by line through the enforcer (see /planner).
 const paypal = makePayPalClient(process.env); // shared REST client (disputes + webhook verification)
+const disputeRules = new DisputeRuleStore(path.join(STATE_DIR, "dispute-rules.json"));
 configureAutopilot(journal, catalog, store, `http://localhost:${PORT}`);
 const journeys = new JourneyPlanner(STATE_DIR, journal);
 // The agent's journalled memory: what it knows about its principal, auditable like everything else.
@@ -1305,6 +1307,91 @@ function formatForApi(minor: bigint, currency: string): string {
   if (exp === 0) return minor.toString();
   const s = minor.toString().padStart(exp + 1, "0");
   return `${s.slice(0, -exp)}.${s.slice(-exp)}`;
+}
+
+// --- Dispute automation rules (PayPal has them; ours are coverage-aware) ------
+app.get("/api/disputes/rules", (_req, res) => {
+  res.json({ rules: disputeRules.list() });
+});
+
+app.post("/api/disputes/rules", (req, res) => {
+  const b = (req.body ?? {}) as { name?: string; reasons?: string[]; maxAmount?: number; requireMandate?: boolean; action?: string; priority?: number };
+  if (!b.name) return res.status(400).json({ error: "name is required" });
+  const rule = disputeRules.create({
+    name: String(b.name), reasons: Array.isArray(b.reasons) ? b.reasons : [],
+    maxAmount: b.maxAmount !== undefined ? Number(b.maxAmount) : undefined,
+    requireMandate: b.requireMandate !== false,
+    action: b.action === "auto_reject" ? "auto_reject" : "auto_refund",
+    priority: b.priority,
+  });
+  journal.append("dispute_rule_created", { rule_id: rule.id, name: rule.name, action: rule.action, reasons: rule.reasons });
+  res.status(201).json(rule);
+});
+
+app.delete("/api/disputes/rules/:id", (req, res) => {
+  res.json({ ok: disputeRules.remove(req.params.id) });
+});
+
+app.post("/api/disputes/rules/:id/toggle", (req, res) => {
+  const active = Boolean((req.body as { active?: boolean } | undefined)?.active);
+  const r = disputeRules.setActive(req.params.id, active);
+  if (!r) return res.status(404).json({ error: "rule not found" });
+  journal.append("dispute_rule_toggled", { rule_id: r.id, active });
+  res.json(r);
+});
+
+// run every active rule against the current disputes; matched auto_refund rules
+// settle through the REAL fast lane (PayPal refund, journalled), auto_reject just
+// flags the case for manual submission. This is what PayPal's "Automatisez vos
+// résolutions" does — with the coverage guard theirs lacks.
+app.post("/api/disputes/rules/evaluate", async (_req, res) => {
+  const actions: Array<Record<string, unknown>> = [];
+  let disputes: any[] = [];
+  try {
+    disputes = (await disputes_service_list()) ?? [];
+  } catch (e) {
+    return res.status(502).json({ error: `disputes unavailable: ${(e as Error).message}` });
+  }
+  for (const d of disputes) {
+    if (String(d.status ?? "").toUpperCase().includes("RESOLVED")) continue;
+    const pack = buildEvidencePack(d, { enforcer, journal, store, keys });
+    const facts = {
+      hasLinkedReceipt: Boolean(pack.linkedPurchase),
+      isRecurringMandate: false,
+      hasFulfillment: Boolean(pack.fulfillment),
+      ...(pack.refund?.refundId ? { refundId: pack.refund.refundId } : {}),
+    };
+    const m = disputeRules.match(d, facts);
+    if (!m) continue;
+    if (m.rule.action === "auto_refund") {
+      if (rails.mode === "mock" || !paypal) {
+        actions.push({ dispute: d.disputeId, rule: m.rule.name, action: "auto_refund", simulated: true, note: "mock rails — refund is a sandbox/live operation" });
+        continue;
+      }
+      const captureId = pack.linkedPurchase?.receipt.captureId ?? d.disputedTransactions?.[0]?.transaction_id;
+      if (!captureId) { actions.push({ dispute: d.disputeId, rule: m.rule.name, error: "no capture id" }); continue; }
+      const rf = await paypal.refundCapture({
+        captureId, amount: d.amount, currency: d.currency,
+        note: `carte-blanche rule "${m.rule.name}": settled ${d.disputeId}`,
+        requestId: `cb-rule-${m.rule.id}-${d.disputeId}`.slice(0, 64),
+      });
+      const refundId = (rf.data as { id?: string } | undefined)?.id ?? "";
+      journal.append("dispute_rule_applied", {
+        dispute_id: d.disputeId, rule_id: m.rule.id, rule_name: m.rule.name,
+        action: "auto_refund", capture_id: captureId, ...(refundId ? { refund_id: refundId } : {}),
+        amount: d.amount, currency: d.currency, ok: rf.ok, paypal_status: rf.status,
+      });
+      actions.push({ dispute: d.disputeId, rule: m.rule.name, action: "auto_refund", ok: rf.ok, refundId, paypalStatus: rf.status });
+    } else {
+      journal.append("dispute_rule_applied", { dispute_id: d.disputeId, rule_id: m.rule.id, rule_name: m.rule.name, action: "auto_reject" });
+      actions.push({ dispute: d.disputeId, rule: m.rule.name, action: "auto_reject", note: "flagged for evidence submission" });
+    }
+  }
+  res.json({ evaluated: disputes.length, actions });
+});
+
+async function disputes_service_list(): Promise<any[] | null> {
+  try { return await disputes.list(); } catch { return null; }
 }
 
 // Agent-facing artifacts that live outside the Vite build
