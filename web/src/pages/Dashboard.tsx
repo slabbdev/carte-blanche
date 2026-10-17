@@ -49,10 +49,12 @@ export default function Dashboard() {
   const calReady = useScript("/vendor/bryntum/calendar.umd.js", () => Boolean((window as any).bryntum?.Calendar));
   const chartsReady = useScript("/vendor/charts/ag-charts-community.min.js", () => Boolean((window as any).agCharts?.AgCharts));
 
+  const [txCount, setTxCount] = useState<number | null>(null);
   const load = async () => {
     try {
       const d = await api<{ source: string; disputes: any[] }>("/api/disputes");
       setDisputes(d.disputes ?? []);
+      api<{ count: number }>("/api/paypal/money").then((m) => setTxCount(m.count ?? null)).catch(() => setTxCount(null));
       setStatusline((d.disputes ?? []).length + " dispute(s) · " +
         (d.source === "paypal" ? "PAYPAL SANDBOX" : "MOCK RAILS") + " — pick a row for the defense kit");
     } catch (e: any) { setStatusline("error: " + e.message); }
@@ -208,6 +210,14 @@ export default function Dashboard() {
   const cov = pack?.pack?.coverage;
   const playbook = STAGE_PLAYBOOK[String(current?.stage || "").toUpperCase()];
 
+  const isOpen = (d: any) => !/RESOLVED/i.test(String(d.status || ""));
+  const hotDeadlines = disputes.filter((d: any) => {
+    const dl = daysLeft(d.respondBy);
+    return dl !== null && dl <= 3 && isOpen(d);
+  });
+  const openCount = disputes.filter(isOpen).length;
+  const ratePct = txCount !== null && txCount > 0 ? (disputes.length / txCount) * 100 : null;
+
   return (
     <>
       <header className="page"><h1>Resolution Center</h1></header>
@@ -217,6 +227,16 @@ export default function Dashboard() {
         and the cases <b>you filed as a buyer</b> (tab) — including contestations sealed on <a href="/oversight">/oversight</a>
         {" "}before they are filed on PayPal.
       </p>
+
+      {hotDeadlines.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: "4px solid #c9791a", background: "#fff8ee" }}>
+          <b style={{ fontSize: 14 }}>⏰ {hotDeadlines.length} dossier{hotDeadlines.length > 1 ? "s" : ""} à répondre sous 3 jours</b>
+          <span className="muted" style={{ fontSize: 12.5, marginLeft: 8 }}>
+            {hotDeadlines.map((d: any) => `${d.disputeId} — ${daysLeft(d.respondBy)}j restant${daysLeft(d.respondBy) > 1 ? "s" : ""}`).join(" · ")}.
+            Passé le deadline, PayPal décide seul et la commission litige ($15–30) tombe.
+          </span>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -262,6 +282,29 @@ export default function Dashboard() {
           <span className="muted" style={{ fontSize: 12 }}>les commandes de ta boutique — marqueur agent inclus</span>
         </div>
         <div id="sales-strip"><RecentSales /></div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16, display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap", padding: "14px 18px" }}>
+        <div>
+          <div className="muted" style={{ fontSize: 12 }}>Transactions (30 j)</div>
+          <b style={{ fontSize: 20 }}>{txCount === null ? "—" : txCount}</b>
+        </div>
+        <div>
+          <div className="muted" style={{ fontSize: 12 }}>Litiges ({openCount} ouvert{openCount > 1 ? "s" : ""})</div>
+          <b style={{ fontSize: 20 }}>{disputes.length}</b>
+        </div>
+        <div>
+          <div className="muted" style={{ fontSize: 12 }}>Taux de litige</div>
+          <b style={{ fontSize: 20, display: "flex", alignItems: "center", gap: 8 }}>
+            {ratePct === null ? "—" : ratePct.toFixed(2) + " %"}
+            {ratePct !== null && (ratePct > 1.5
+              ? <span className="pill warn">⚠ au-dessus du seuil PayPal ~1,5 %</span>
+              : <span className="pill ok">sous le seuil PayPal ~1,5 %</span>)}
+          </b>
+        </div>
+        <span className="muted" style={{ fontSize: 12, marginLeft: "auto", maxWidth: 320 }}>
+          le taux que PayPal regarde avant de trancher un litige en ta faveur — résoudre en INQUIRY le garde intact
+        </span>
       </div>
 
       <div className="rc-tabs">
@@ -380,6 +423,19 @@ export default function Dashboard() {
             </div>
           )}
 
+          {String(current.stage || "").toUpperCase() === "INQUIRY" && (
+            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "10px 12px", margin: "10px 0", fontSize: 12.5 }}>
+              <b>Contacter l'acheteur</b> <span className="muted">(stade INQUIRY : résoudre à l'amiable = aucun frais, pas d'escalade)</span>
+              <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="ghost" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => {
+                  const msg = `Bonjour, votre litige ${current.disputeId} concernant "${current.description || "votre commande"}" nous a été transmis. Nous pouvons le résoudre immédiatement : remboursement intégral de ${current.amount ?? ""} ${current.currency ?? ""} ou renvoi du produit. Répondez à ce message pour nous indiquer votre choix.`;
+                  navigator.clipboard.writeText(msg).then(() => setDHint("✓ message d'amiable copié — collez-le dans le Resolution Center PayPal pour résoudre au stade INQUIRY (aucun frais).")).catch(() => {});
+                }}>📋 Copier un message d'amiable</button>
+                <span className="muted">à coller dans le Resolution Center PayPal (stade INQUIRY)</span>
+              </div>
+            </div>
+          )}
+
           <div className="tabs">
             <button className={packTab === "md" ? "active" : ""} onClick={() => setPackTab("md")}>Evidence pack (markdown)</button>
             <button className={packTab === "json" ? "active" : ""} onClick={() => setPackTab("json")}>Raw JSON</button>
@@ -409,6 +465,12 @@ export default function Dashboard() {
 
 function RecentSales() {
   const [rows, setRows] = useState<any[] | null>(null);
+  // PayPal merchant rate estimate: 3.49% + 0.30 fixe (US/EU standard, sandbox miroir)
+  const netEst = (amount: string) => {
+    const a = Number(amount);
+    if (!Number.isFinite(a)) return amount;
+    return (a - (a * 0.0349 + 0.3)).toFixed(2);
+  };
   useEffect(() => {
     api<{ receipts: any[] }>("/api/receipts").then((d) => setRows((d.receipts ?? []).slice(0, 5))).catch(() => setRows([]));
   }, []);
@@ -421,6 +483,7 @@ function RecentSales() {
       <span className="desc" title={esc(r.description)}>{esc(r.description)}</span>
       <a className="mono" href={`/verify/${esc(r.receiptId)}`}>{esc(r.receiptId)} →</a>
       <span className="amt">{esc(r.amount)} {esc(r.currency)}</span>
+      <span className="muted" title="frais estimés 3,49 % + 0,30 $ — le net exact est dans le détail PayPal">net ~{esc(netEst(r.amount))} {esc(r.currency)}</span>
     </div>
   ));
 }
