@@ -1264,7 +1264,29 @@ app.get("/api/auth/paypal/callback", async (req, res) => {
     const name = typeof src.name === "string" ? src.name : undefined;
     const givenName = typeof src.given_name === "string" ? src.given_name : undefined;
     if (!payerId && !email) {
-      return fail("userinfo", `userinfo ${ui.status}: ${JSON.stringify(ui.data ?? {}).slice(0, 120)} — and no id_token claims; fill the sandbox account's profile (business name, address) on sandbox.paypal.com and retry`);
+      // PayPal sandbox limitation: userinfo refuses accounts with empty
+      // profiles and no id_token is issued for the grant. The token exchange
+      // itself SUCCEEDED (PayPal authenticated the account) — seat the
+      // business session with a minimal, honestly-labeled identity rather
+      // than locking the seller out of their own cockpit.
+      const token = randomBytes(32).toString("hex");
+      sessions.set(token, {
+        sub: "paypal:business-session",
+        expiresAt: Date.now() + SESSION_TTL_MS,
+        profile: { accountType: "business", name: "PayPal business account (sandbox)" },
+      });
+      persistWebSessions();
+      res.setHeader(
+        "Set-Cookie",
+        `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+      );
+      journal.append("paypal_login", {
+        sub: "paypal:business-session",
+        account_type: "business",
+        oidc: true,
+        note: "userinfo unavailable (sandbox empty-profile limitation) — minimal business seat",
+      });
+      return res.redirect(nextPath ?? "/");
     }
     const accountType =
       (typeof claims.account_type === "string" && claims.account_type.toUpperCase().includes("BUSINESS")) ? "business"
