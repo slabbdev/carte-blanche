@@ -15,6 +15,7 @@ import { Enforcer } from "./enforcer/enforcer.js";
 import { verifyFullReceipt, verifyFullDenial } from "./receipts/receipts.js";
 import { DisputeService } from "./disputes/service.js";
 import { DisputeRuleStore } from "./disputes/rules.js";
+import { AgentPassportStore } from "./agent/passport.js";
 import { JourneyPlanner, journeyTotal, mandateLimitsFrom, executeJourney } from "./journey/journey.js";
 import { PreferenceStore } from "./agent/preferences.js";
 import { TrackRecordService } from "./agent/trackrecord.js";
@@ -41,7 +42,8 @@ const rails = makeRails(process.env);
 // Third-party time anchoring: best-effort on sandbox and live (additive
 // evidence, never a purchase gate); mock stays deterministic and offline.
 const tsa = rails.mode === "mock" ? undefined : new TsaClient(process.env.TSA_URLS?.split(","));
-const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR, { tsa });
+const agentPassports = new AgentPassportStore(path.join(STATE_DIR, "agent-passports.json"));
+const enforcer = new Enforcer(journal, store, rails, keys, STATE_DIR, { tsa, passports: agentPassports });
 // Real-product catalog (Channel3 sponsor): without an API key it serves
 // clearly-labeled sample products so the shopping scene still works offline.
 const catalog = new Channel3Catalog(process.env.CHANNEL3_API_KEY);
@@ -661,6 +663,9 @@ app.post("/api/agent/purchase", async (req, res) => {
     intent_text?: string;
     intent_channel?: string;
     intent_session?: string;
+    agent_passport_id?: string;
+    agent_proof_signature?: string;
+    agent_proof_ts?: string;
   };
   if (!body.mandate_id || !body.amount || !body.currency || !body.description) {
     return res.status(400).json({ error: "mandate_id, amount, currency and description are required" });
@@ -679,6 +684,13 @@ app.post("/api/agent/purchase", async (req, res) => {
           text: String(body.intent_text),
           ...(body.intent_channel ? { channel: String(body.intent_channel) } : {}),
           ...(body.intent_session ? { sessionRef: String(body.intent_session) } : {}),
+        },
+      } : {}),
+      ...(body.agent_passport_id && body.agent_proof_signature ? {
+        agentProof: {
+          agentId: String(body.agent_passport_id),
+          signature: String(body.agent_proof_signature),
+          ts: String(body.agent_proof_ts ?? new Date().toISOString()),
         },
       } : {}),
     });
@@ -1419,6 +1431,39 @@ async function disputes_service_list(): Promise<any[] | null> {
 // Agent-facing artifacts that live outside the Vite build
 app.get("/llms.txt", (_req, res) => {
   res.sendFile(path.join(repoRoot, "src", "web", "llms.txt"));
+});
+
+// --- Agent passports: WHO is this agent (the identity layer, integrated) -----
+// Register once (server-generated keypair returned ONCE, or bring your own
+// public key), then sign every purchase with cb-agent-proof:<logicalKey>:<ts>.
+// Receipts stamp the passport DID — proof of WHICH agent instance executed.
+app.post("/api/agents/passport", (req, res) => {
+  const b = (req.body ?? {}) as { agent_id?: string; public_key_b64?: string; owner?: string };
+  const out = agentPassports.register({
+    ...(b.agent_id ? { agentId: String(b.agent_id) } : {}),
+    ...(b.public_key_b64 ? { publicKeyB64: String(b.public_key_b64) } : {}),
+    ...(b.owner ? { owner: String(b.owner) } : {}),
+  });
+  journal.append("agent_passport_issued", {
+    agent_id: out.passport.agentId, did: out.passport.did,
+    fingerprint: out.passport.fingerprint,
+    server_generated: !b.public_key_b64,
+  });
+  res.status(201).json({
+    ...out,
+    sign_template: "cb-agent-proof:<logical_key>:<ts>",
+    note: "sign that string with the Ed25519 secret key and pass it as agent_proof on every purchase",
+  });
+});
+
+app.get("/api/agents/passport/:agentId", (req, res) => {
+  const p = agentPassports.get(req.params.agentId);
+  if (!p) return res.status(404).json({ error: "passport not found" });
+  res.json(p);
+});
+
+app.get("/api/agents/passports", (_req, res) => {
+  res.json({ passports: agentPassports.list() });
 });
 
 // The sandbox account's REAL money view, straight from PayPal's Transaction

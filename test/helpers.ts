@@ -5,6 +5,7 @@ import { generateKeyPair, type KeyPair } from "../src/lib/sign.js";
 import { Journal } from "../src/journal/journal.js";
 import { MandateStore } from "../src/mandate/store.js";
 import { newMandateId, type Mandate } from "../src/mandate/mandate.js";
+import { AgentPassportStore } from "../src/agent/passport.js";
 import { signMandate } from "../src/mandate/signing.js";
 import { MockRails } from "../src/paypal/adapter.js";
 import { Enforcer } from "../src/enforcer/enforcer.js";
@@ -57,10 +58,11 @@ export function setupWorld(limits: Partial<Mandate["limits"]> = {}, tsa?: TsaCli
   const journal = new Journal(path.join(stateDir, "journal.jsonl"), keys.journal);
   const store = new MandateStore(path.join(stateDir, "mandates.json"));
   const mock = new MockRails();
-  const enforcer = new Enforcer(journal, store, mock, keys, stateDir, tsa ? { tsa } : undefined);
+  const passports = new AgentPassportStore(path.join(stateDir, "agent-passports.json"));
+  const enforcer = new Enforcer(journal, store, mock, keys, stateDir, { tsa, passports });
   const { mandate } = makeMandate(keys, limits);
   store.put(signMandate(mandate, keys.server.privateKeyB64, keys.server.publicKeyB64));
-  return { enforcer, journal, store, mock, keys, mandateId: mandate.id, stateDir };
+  return { enforcer, journal, store, mock, keys, mandateId: mandate.id, stateDir, passports };
 }
 
 export function keyPair(): KeyPair {

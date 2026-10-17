@@ -1,5 +1,6 @@
 import { canonicalJson } from "../lib/canonical.js";
 import { sha256Hex } from "../lib/sign.js";
+import { passportMessage } from "../agent/passport.js";
 import { loadJson, saveJson } from "../lib/persist.js";
 import type { Keys } from "../lib/keys.js";
 import type { Journal } from "../journal/journal.js";
@@ -56,6 +57,12 @@ export interface PurchaseRequest {
    * agent to buy that" is the buyer's own sealed words + their signed mandate.
    */
   intent?: { text: string; channel?: string; sessionRef?: string };
+  /**
+   * Agent passport proof-of-possession: the executing agent signs
+   * cb-agent-proof:<logicalKey>:<ts> with its registered Ed25519 key. Verified
+   * against the passport DID; stamped on the receipt as WHO executed.
+   */
+  agentProof?: { agentId: string; signature: string; ts: string };
 }
 
 export type Outcome =
@@ -84,6 +91,7 @@ export class Enforcer {
 
   private readonly tsa?: TsaClient;
   private readonly now: () => number;
+  private readonly passports?: import("../agent/passport.js").AgentPassportStore;
 
   constructor(
     private readonly journal: Journal,
@@ -91,8 +99,9 @@ export class Enforcer {
     private readonly rails: PaymentRails,
     private readonly keys: Keys,
     private readonly stateDir: string,
-    options?: { tsa?: TsaClient; now?: () => number },
+    options?: { tsa?: TsaClient; now?: () => number; passports?: import("../agent/passport.js").AgentPassportStore },
   ) {
+    this.passports = options?.passports;
     this.tsa = options?.tsa;
     // Injectable clock: production uses wall time; tests and the recurring
     // demo time-travel across mandate windows without sleeping.
@@ -248,6 +257,17 @@ export class Enforcer {
 
     // --- authorized: journal intent, then execute with deterministic ids ---
     const at = new Date(now).toISOString();
+
+    // agent passport proof-of-possession: WHICH software instance executed
+    let executedBy: { passportId: string; did: string } | undefined;
+    if (req.agentProof) {
+      const ok = this.passports?.verifyProof(req.agentProof.agentId, logicalKey, req.agentProof.ts, req.agentProof.signature);
+      if (!ok) {
+        return deny("MANDATE_TAMPERED", `agent passport proof invalid for ${req.agentProof.agentId} — the caller is not the registered agent instance`);
+      }
+      const pp = this.passports?.get(req.agentProof.agentId);
+      executedBy = { passportId: req.agentProof.agentId, did: pp!.did };
+    }
     this.journal.append("purchase_requested", {
       mandate_id: req.mandateId,
       logical_key: logicalKey,
@@ -348,6 +368,7 @@ export class Enforcer {
           ...(req.intent.sessionRef ? { sessionRef: req.intent.sessionRef } : {}),
         },
       } : {}),
+      ...(executedBy ? { agent: executedBy } : {}),
       orderId: capture.orderId,
       captureId: capture.captureId,
       status: capture.status,
