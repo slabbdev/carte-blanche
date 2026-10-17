@@ -256,6 +256,14 @@ export default function Dashboard() {
         {rulesHint && <div className="hint" style={{ marginTop: 6 }}>{rulesHint}</div>}
       </div>
 
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <h2>Ventes récentes</h2>
+          <span className="muted" style={{ fontSize: 12 }}>les commandes de ta boutique — marqueur agent inclus</span>
+        </div>
+        <div id="sales-strip"><RecentSales /></div>
+      </div>
+
       <div className="rc-tabs">
         <button className={"rc-tab" + (tab === "sales" ? " active" : "")} onClick={() => setTab("sales")}>Against my sales</button>
         <button className={"rc-tab" + (tab === "mine" ? " active" : "")} onClick={() => setTab("mine")}>
@@ -397,6 +405,24 @@ export default function Dashboard() {
       )}
     </>
   );
+}
+
+function RecentSales() {
+  const [rows, setRows] = useState<any[] | null>(null);
+  useEffect(() => {
+    api<{ receipts: any[] }>("/api/receipts").then((d) => setRows((d.receipts ?? []).slice(0, 5))).catch(() => setRows([]));
+  }, []);
+  if (rows === null) return <div className="empty">loading…</div>;
+  if (rows.length === 0) return <div className="empty">no sales yet — purchases made by agents land here</div>;
+  return rows.map((r: any) => (
+    <div className="mine-row" key={r.receiptId}>
+      <span className="pill ok">Terminé</span>
+      <span className="mono">{esc(String(r.createdAt).replace("T", " ").slice(0, 16))}</span>
+      <span className="desc" title={esc(r.description)}>{esc(r.description)}</span>
+      <a className="mono" href={`/verify/${esc(r.receiptId)}`}>{esc(r.receiptId)} →</a>
+      <span className="amt">{esc(r.amount)} {esc(r.currency)}</span>
+    </div>
+  ));
 }
 
 function MineList() {

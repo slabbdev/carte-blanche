@@ -130,6 +130,8 @@ export async function runScriptedPolicy(
     currency: mandate.limits.currency,
     description: `[autopilot] ${pick.title.slice(0, 80)}`,
     ...(pick.merchant ? { payee: pick.merchant } : {}),
+    // the user's prompt IS the activation — sealed with the purchase
+    intent: { text: opts.goal, channel: "carte-blanche-autopilot" },
   });
   const result: AutopilotResult = {
     mode: "scripted",

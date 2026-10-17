@@ -317,6 +317,28 @@ export default function Console() {
         {selfNote && <div className="hint" style={{ color: "var(--green)", marginTop: 8 }} dangerouslySetInnerHTML={{ __html: selfNote }} />}
       </section>
 
+      <section className="card" style={{ background: "linear-gradient(180deg,#f5f9ff, #fff)" }}>
+        <h2>🤖 Achat automatique — dis, l'agent fait le reste</h2>
+        <p className="sub">Écris ce que tu veux (langage libre) + un budget. L'agent cherche dans le catalogue
+        live, achète la meilleure offre autorisée — et <b>ton prompt est scellé</b> dans la preuve d'achat
+        (hash vérifiable). Un refus reste une preuve signée.</p>
+        <div className="row" style={{ alignItems: "stretch" }}>
+          <div style={{ flex: 3, minWidth: 260 }}>
+            <textarea value={apGoal} onChange={(e) => setApGoal(e.target.value)}
+              placeholder='Ex : « achète-moi un clavier mécanique pour le bureau, max 80 $ »'
+              rows={2} style={{ width: "100%", resize: "vertical", borderRadius: 10, border: "1px solid #c8cdd6", padding: "10px 12px", font: "inherit" }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <label>Budget max</label>
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end" }}>
+            <button onClick={runAutopilot} disabled={noMandate} title={noMandate ? "pick or grant a mandate first" : ""}>🤖 Acheter maintenant</button>
+          </div>
+        </div>
+        {apOut && <div className="outcome" dangerouslySetInnerHTML={{ __html: apOut }} />}
+      </section>
+
       <section className="card">
         <h2>Shop as the agent</h2>
         <p className="sub">Real product search across 100M+ retail offers (Channel3). Compare merchant offers — the cheaper unfamiliar one is exactly how an agent drifts; watch the mandate stop it.</p>
