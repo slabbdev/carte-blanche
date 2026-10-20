@@ -373,6 +373,8 @@ src/
 
 ## API
 
+**Postman collection** (Postman is a hackathon partner): [`docs/postman/carte-blanche.postman_collection.json`](docs/postman/carte-blanche.postman_collection.json) — 25 requests in 6 folders generated from the OpenAPI contract (`npm run postman`), `baseUrl` preset to the live instance. Grant a mandate first, then everything else.
+
 | Route | What |
 |---|---|
 | `POST /api/mandates` | grant a mandate (signed) |

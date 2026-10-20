@@ -239,7 +239,7 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
 - ⚠️ Repo: https://github.com/slabbdev/carte-blanche
 - ⚠️ Video (< 3 min, YouTube public): **TO UPLOAD** — re-shot on the React back-office
 - Contract: https://carte-blanche-6jgo.onrender.com/openapi.json · `llms.txt` at the root ·
-  `/docs` API reference
+  `/docs` API reference · Postman collection: `docs/postman/carte-blanche.postman_collection.json`
 
 ## Try it in 60 seconds (judges)
 
