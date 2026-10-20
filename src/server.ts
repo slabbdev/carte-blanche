@@ -28,6 +28,7 @@ import { loadEnvFile } from "./lib/env.js";
 loadEnvFile();
 
 import { TsaClient, parseTimestampResponse, verifyTimestampToken } from "./journal/tsa.js";
+import { llmConfigured, runLlmTurn } from "./ai/llmTurn.js";
 
 const PORT = Number(process.env.PORT ?? 8790);
 const KEYS_DIR = process.env.KEYS_DIR ?? ".keys";
@@ -67,7 +68,7 @@ const trackRecords = new TrackRecordService(journal, keys.server);
 
 const app = express();
 app.set("trust proxy", 1); // behind Render's proxy: req.protocol must be https for the OIDC redirect URI
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 
 // ---------------------------------------------------------------------------
 // Demo auth: the merchant console sits behind a simulated PayPal login. The
@@ -1470,7 +1471,8 @@ app.get("/api/agents/passports", (_req, res) => {
 // Search: each transaction carries the balance AFTER it, so the latest one IS
 // the account balance. Captures move it up, refunds move it down — the user
 // watches the sandbox economy actually move.
-app.get("/api/paypal/money", async (_req, res) => {
+app.get("/api/paypal/money", async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 10) || 10, 1), 500);
   if (rails.mode === "mock" || !paypal) {
     return res.status(409).json({ error: "mock rails: the sandbox balance is a PayPal-side view" });
   }
@@ -1483,7 +1485,7 @@ app.get("/api/paypal/money", async (_req, res) => {
       String(a.transaction_info.transaction_initiation_date ?? "") < String(b.transaction_info.transaction_initiation_date ?? "") ? 1 : -1);
     const latest = all[0]?.transaction_info;
     const balance = latest?.available_balance ?? latest?.ending_balance ?? null;
-    const rows = all.slice(0, 10).map((t) => {
+    const rows = all.slice(0, limit).map((t) => {
       const ti = t.transaction_info;
       const value = Number.parseFloat(ti.transaction_amount?.value ?? "0");
       return {
@@ -1505,6 +1507,29 @@ app.get("/api/paypal/money", async (_req, res) => {
     });
   } catch (e) {
     res.status(502).json({ error: `paypal money view failed: ${(e as Error).message}` });
+  }
+});
+
+// One LLM turn for the AG Studio dashboard agents. Gated: a turn costs money,
+// and the evidence API below stays public on purpose — this is the one route
+// that is not evidence.
+// whether the dashboard agents have a model to run on (no key is a visible state, not a crash)
+app.get("/api/llm/status", (_req, res) => {
+  res.json({ configured: llmConfigured(), model: llmConfigured() ? process.env.OPENAI_MODEL ?? "gpt-4o-mini" : null });
+});
+
+app.post("/api/llm/turn", async (req, res) => {
+  if (!sessionOf(req)) return res.status(401).json({ error: "login required" });
+  if (!llmConfigured()) {
+    return res.status(503).json({
+      error: "LLM not configured",
+      hint: "set OPENAI_API_KEY (and OPENAI_BASE_URL for any OpenAI-compatible provider) on the server",
+    });
+  }
+  try {
+    res.json(await runLlmTurn(req.body));
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
   }
 });
 

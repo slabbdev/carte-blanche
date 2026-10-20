@@ -8,6 +8,7 @@ const LINKS = [
   { id: "planner", href: "/planner", label: "Journey planner", icon: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" /></> },
   { id: "oversight", href: "/oversight", label: "My agents (oversight)", icon: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" /><circle cx="12" cy="12" r="3" /></> },
   { id: "rc", href: "/dashboard", label: "Resolution Center", icon: <path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" /> },
+  { id: "analytics", href: "/analytics", label: "Analytics (AG Studio)", icon: <><path d="M4 19h16" /><path d="M6 15l4-4 3 3 5-6" /><circle cx="18" cy="8" r="1.5" /></> },
   { id: "verify", href: "/verify", label: "Public verification", icon: <><path d="M9 12l2 2 4-5" /><circle cx="12" cy="12" r="9" /></> },
   { id: "docs", href: "/docs", label: "API", icon: <path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12" /> },
 ] as const;
@@ -16,6 +17,8 @@ interface Me { sub: string; profile?: { name?: string; givenName?: string; email
 
 export default function Shell({ requireAuth = true }: { requireAuth?: boolean }) {
   const loc = useLocation();
+  // AG Studio needs the width: on /analytics the sidebar becomes an icon rail
+  const rail = loc.pathname === "/analytics";
   const [me, setMe] = useState<Me | null | "anon">(null);
   const [open, setOpen] = useState(false);
 
@@ -66,15 +69,15 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
         )}
       </div>
       <div className="shell">
-        <nav className="sidebar bo-sidebar">
-          <Link className="bo-create" to="/planner"><span style={{ fontSize: 15 }}>+</span> Create</Link>
+        <nav className={"sidebar bo-sidebar" + (rail ? " rail" : "")}>
+          <Link className="bo-create" to="/planner" title="Create"><span style={{ fontSize: 15 }}>+</span>{!rail && " Create"}</Link>
           {LINKS.map((l: any) =>
             l.section ? (
               <div className="bo-sectiontitle" style={{ margin: "14px 0 4px", fontSize: 11 }} key={l.section}>{l.section}</div>
             ) : (
-              <Link key={l.id} className={"bo-navitem" + (loc.pathname === l.href ? " active" : "")} to={l.href}>
+              <Link key={l.id} className={"bo-navitem" + (loc.pathname === l.href ? " active" : "")} to={l.href} title={rail ? l.label : undefined}>
                 <svg viewBox="0 0 24 24">{l.icon}</svg>
-                {l.label}
+                <span className="lbl">{l.label}</span>
                 <span className="chev">›</span>
               </Link>
             ),
@@ -82,7 +85,7 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
           <div className="foot">Integration concept — simulation on sandbox rails.<br />Not an official PayPal product.</div>
         </nav>
         <main className="main">
-          <div className="content">
+          <div className={"content" + (rail ? " wide" : "")}>
             <Outlet />
           </div>
         </main>

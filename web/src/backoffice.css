@@ -81,3 +81,10 @@ a.bo-navitem:hover { background: #eef3fb; }
              flex-wrap: wrap; font-size: 12.5px; color: var(--muted); align-items: center; }
 .bo-footer .lang { margin-left: auto; }
 .bo-footer a { color: var(--muted); }
+
+/* /analytics: AG Studio owns the width — the sidebar collapses to an icon rail, the content goes full-bleed */
+.bo-sidebar.rail { width: 64px; flex: 0 0 64px; padding-left: 10px; padding-right: 10px; }
+.bo-sidebar.rail .bo-navitem { justify-content: center; padding: 11px 0; gap: 0; }
+.bo-sidebar.rail .lbl, .bo-sidebar.rail .chev, .bo-sidebar.rail .bo-sectiontitle, .bo-sidebar.rail .foot { display: none; }
+.bo-sidebar.rail .bo-create { padding: 10px 0; }
+.main > .content.wide { max-width: none; padding: 18px 18px 30px; }

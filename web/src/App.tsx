@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Shell from "./components/Shell";
 import Login from "./pages/Login";
@@ -8,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Board from "./pages/Board";
 import Verify from "./pages/Verify";
 import Docs from "./pages/Docs";
+// AG Studio ships its own grid + charts bundle: only the Analytics route pays for it
+const Analytics = lazy(() => import("./pages/Analytics"));
 
 export default function App() {
   return (
@@ -24,6 +27,7 @@ export default function App() {
         <Route path="/oversight" element={<Oversight />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/board" element={<Board />} />
+        <Route path="/analytics" element={<Suspense fallback={<div className="empty" style={{ padding: 40 }}>loading AG Studio…</div>}><Analytics /></Suspense>} />
       </Route>
       <Route path="*" element={<RedirectHome />} />
     </Routes>

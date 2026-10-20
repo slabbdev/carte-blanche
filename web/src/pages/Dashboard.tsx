@@ -232,7 +232,7 @@ export default function Dashboard() {
         <div className="card" style={{ marginBottom: 16, borderLeft: "4px solid #c9791a", background: "#fff8ee" }}>
           <b style={{ fontSize: 14 }}>⏰ {hotDeadlines.length} dossier{hotDeadlines.length > 1 ? "s" : ""} à répondre sous 3 jours</b>
           <span className="muted" style={{ fontSize: 12.5, marginLeft: 8 }}>
-            {hotDeadlines.map((d: any) => `${d.disputeId} — ${daysLeft(d.respondBy)}j restant${daysLeft(d.respondBy) > 1 ? "s" : ""}`).join(" · ")}.
+            {hotDeadlines.map((d: any) => `${d.disputeId} — ${daysLeft(d.respondBy) ?? 0}j restant${(daysLeft(d.respondBy) ?? 0) > 1 ? "s" : ""}`).join(" · ")}.
             Passé le deadline, PayPal décide seul et la commission litige ($15–30) tombe.
           </span>
         </div>

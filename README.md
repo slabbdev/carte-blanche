@@ -183,7 +183,9 @@ account carries both faces; the sidebar switches seats.
 4. **Resolution Center** (`/dashboard`) — the seller's seat: pick the case → coverage matrix,
    FIGHT / REFUND FIRST, fast lane, the evidence pack with the buyer's sealed words, one-click
    submit to PayPal's Disputes API; deadlines timeline and dispute board.
-5. **Verify** (`/verify`) — paste any receipt or refusal id; every signature and the Merkle
+5. **Analytics** (`/analytics`) — the AG Studio dashboard over the same six tables; open the
+   agent panel and pick a prompt starter ("which walls held?").
+6. **Verify** (`/verify`) — paste any receipt or refusal id; every signature and the Merkle
    inclusion proof check in your browser, no account.
 
 Locally: `PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=… PAYPAL_CLIENT_SECRET=… npm start` with the
@@ -313,7 +315,7 @@ Every sponsor prize category is exercised in production, not sprinkled on:
 
 | Sponsor | Where it lives in Carte Blanche |
 |---|---|
-| **AG Grid** | The merchant dispute cockpit (`/dashboard`): live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, pagination, CSV export, persisted column state — plus AG Charts for disputes-by-status and amount-by-reason, and the **journey grid** (`/planner`): the basket's table auto-generated from its lines, filling with signed outcomes as the run goes |
+| **AG Grid** | **AG Studio** (`/analytics`): the seller's self-serve dashboard over six tables (PayPal sales, disputes, agent receipts, refusals, mandates, health), two pre-built pages, a custom **Threshold KPI** widget (dispute rate vs PayPal's 1.5 %) and the **Studio Agent Framework** on our own LLM proxy with merchant prompt starters — plus the Resolution Center grid (`/dashboard`: live SSE feed into async row transactions, floating filters, quick filter, urgency row rules, CSV export), AG Charts, and the **journey grid** (`/planner`) filling with signed outcomes as the run goes |
 | **Render** | The live demo is Render-native: Frankfurt web service, `/healthz` health checks, auto-deploy on commit, Blueprint (`render.yaml`) — including an hourly **cron job** that TSA-anchors the journal on demand (`POST /api/journal/anchor`), keeping the provable-WHEN continuous. Honest note: the free plan has no persistent disk, so the deployed journal lives per-deploy |
 | **Channel3** | The agent's shopping scene (`/api/catalog`, **live key connected**): real search across 100M+ retail offers with **per-merchant price comparison** (offers sorted cheapest-first) — loading a cheaper unfamiliar offer into the purchase form is the drift story the mandate stops. The **Journey planner** (`/planner`) builds whole baskets from live catalog lines |
 | **APIMatic** | The contract is **validated and linted by APIMatic's API** — `validation: OK, linting: OK (0 errors)` against their agentic-tools ruleset — and the **TypeScript SDK is generated and checked in** at [`sdk/typescript/`](sdk/typescript) (`npm run apimatic:sync` replays validate → generate → download against their REST API). Portal hosting lands when the APIMatic workspace is connected |
@@ -359,6 +361,7 @@ src/
 | `POST /api/agent/purchase` | **the agent boundary** — receipt or signed refusal |
 | `GET /api/receipts?mandate_id=` | receipts + refusals |
 | `GET /dashboard` | merchant dispute cockpit (AG Grid) |
+| `GET /analytics` | seller analytics — AG Studio dashboard + agents |
 | `GET /board` | dispute workflow kanban (Bryntum TaskBoard) |
 | `GET /api/disputes` | disputes (sandbox API, or labeled mock rows) |
 | `GET /api/disputes/:id/evidence-pack` | evidence bundle (JSON + markdown) |

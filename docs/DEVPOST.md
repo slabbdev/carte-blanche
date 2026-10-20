@@ -88,6 +88,10 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
 - **Seller health** — dispute rate vs PayPal's ~1.5 % threshold, a deadline banner for cases due
   within 3 days, net-after-fees on every sale, a one-click amicable message for INQUIRY-stage
   cases, and a Bryntum deadlines timeline / dispute kanban.
+- **Analytics (AG Studio)** — self-serve dashboards over sales, disputes, agent receipts,
+  refusals, mandates and a health summary; edit any widget or ask the Studio agents to build
+  one ("agent vs human sales by day"); our **Threshold KPI** tile judges one number against the
+  threshold PayPal applies.
 
 **For agents and integrators**
 
@@ -121,8 +125,14 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
   the walls can be demonstrated without a key. The model never touches money directly: it calls
   the purchase tool, the enforcer decides.
 - **Sponsors, each at a verified depth**:
-  - **AG Grid** — `ag-grid-react` 36 (JSX cell renderers, pinned pills, quick filters, CSV,
-    Theming API) and AG Charts for dispute analytics; their official AI skills vendored.
+  - **AG Grid** — **AG Studio** (`/analytics`): the seller's self-serve dashboard over six tables
+    from the evidence layer and PayPal's records, two pre-built pages, a **custom "Threshold KPI"
+    widget** (one number judged against the threshold PayPal applies — dispute rate vs 1.5 %),
+    and the **Studio Agent Framework** wired through our own LLM proxy (the key never reaches
+    the browser; any OpenAI-compatible model) with prompt starters a merchant would actually
+    ask — "which walls held?", "cases due within 3 days", "refund-spike watch". Plus
+    `ag-grid-react` 36 (JSX cell renderers, pinned pills, quick filters, CSV, Theming API) for
+    the Resolution Center and journey grids, and AG Charts; their official AI skills vendored.
   - **Bryntum** — Calendar (dispute deadlines) and TaskBoard ×2 (dispute kanban, journey board),
     including a documented v7 `taskRenderer` behaviour and the one-bundle-per-page constraint.
   - **APIMatic** — the OpenAPI contract validated through their API, a committed TypeScript SDK,
@@ -206,7 +216,7 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
 `typescript` · `react` · `vite` · `express` · `paypal-orders-v2` · `paypal-payments-v2` ·
 `paypal-disputes-v1` · `paypal-shipment-tracking` · `paypal-transaction-search` ·
 `paypal-webhooks` · `connect-with-paypal-oidc` · `react-paypal-js` · `ed25519` · `merkle-trees` ·
-`rfc3161-tsa` · `ag-grid-react` · `ag-charts` · `bryntum-calendar` · `bryntum-taskboard` ·
+`rfc3161-tsa` · `ag-studio` · `ag-grid-react` · `ag-charts` · `bryntum-calendar` · `bryntum-taskboard` ·
 `channel3-api` · `apimatic` · `render` · `mcp` · `openai-compatible-llm`
 
 ## Links
@@ -238,7 +248,9 @@ click apart in the sidebar.
 4. **Resolution Center** (`/dashboard`) — the seller's seat: pick the case → coverage matrix,
    FIGHT / REFUND FIRST recommendation, fast lane, evidence pack (markdown + JSON) with the
    buyer's sealed words, one-click submit to PayPal; the deadlines timeline and dispute board.
-5. **Verify anything** (`/verify`) — paste any receipt or refusal id: every signature and the
+5. **Analytics** (`/analytics`) — the AG Studio dashboard: KPI tiles, charts and grids over the
+   six tables; open the agent panel and pick a prompt starter.
+6. **Verify anything** (`/verify`) — paste any receipt or refusal id: every signature and the
    Merkle inclusion proof check in your own browser, no account.
 
 Without PayPal credentials, the scripted demos run the whole story on mock rails:
