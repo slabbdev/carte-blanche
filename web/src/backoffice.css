@@ -88,3 +88,20 @@ a.bo-navitem:hover { background: #eef3fb; }
 .bo-sidebar.rail .lbl, .bo-sidebar.rail .chev, .bo-sidebar.rail .bo-sectiontitle, .bo-sidebar.rail .foot { display: none; }
 .bo-sidebar.rail .bo-create { padding: 10px 0; }
 .main > .content.wide { max-width: none; padding: 18px 18px 30px; }
+
+/* Phones: the sidebar is a drawer behind the burger; the store name and dev link make room */
+.bo-backdrop { display: none; }
+@media (max-width: 860px) {
+  .bo-sidebar { display: none; }
+  .bo-sidebar.mobile-open { display: flex; position: fixed; top: 60px; left: 0; bottom: 0; width: 260px; flex-basis: 260px; z-index: 60; box-shadow: 8px 0 30px rgba(12, 26, 58, .18); overflow-y: auto; }
+  .bo-backdrop { display: block; position: fixed; inset: 60px 0 0 0; background: rgba(12, 26, 58, .28); z-index: 55; }
+  .bo-sidebar.rail { display: none; }
+  .main > .content { padding: 16px 14px 60px; }
+}
+@media (max-width: 520px) {
+  .bo-store, .bo-devlink { display: none; }
+}
+@media (max-width: 420px) {
+  .typechip { display: none; }
+  .bo-topbar { padding-left: 10px; padding-right: 10px; gap: 8px; }
+}

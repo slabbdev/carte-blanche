@@ -21,6 +21,8 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
   const rail = loc.pathname === "/analytics";
   const [me, setMe] = useState<Me | null | "anon">(null);
   const [open, setOpen] = useState(false);
+  // mobile: the burger opens the sidebar as a drawer (desktop shows it inline)
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     api<Me>("/api/auth/me").then(setMe).catch(() => setMe("anon"));
@@ -37,7 +39,7 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
   return (
     <>
       <div className="bo-topbar">
-        <button className="bo-burger" aria-label="menu" onClick={() => setOpen((o) => !o)}><span /><span /><span /></button>
+        <button className="bo-burger" aria-label="menu" aria-expanded={navOpen} onClick={() => setNavOpen((o) => !o)}><span /><span /><span /></button>
         <Link className="wordmark-wrap" to="/" style={{ textDecoration: "none" }}>
           <span className="wordmark" style={{ fontSize: 20 }}><span className="pay">Carte</span><span className="pal">Blanche</span></span>
           <span className="forpp">for PayPal</span>
@@ -69,7 +71,7 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
         )}
       </div>
       <div className="shell">
-        <nav className={"sidebar bo-sidebar" + (rail ? " rail" : "")}>
+        <nav className={"sidebar bo-sidebar" + (rail ? " rail" : "") + (navOpen ? " mobile-open" : "")} onClick={() => setNavOpen(false)}>
           <Link className="bo-create" to="/planner" title="Create"><span style={{ fontSize: 15 }}>+</span>{!rail && " Create"}</Link>
           {LINKS.map((l: any) =>
             l.section ? (
@@ -84,6 +86,7 @@ export default function Shell({ requireAuth = true }: { requireAuth?: boolean })
           )}
           <div className="foot">Integration concept — simulation on sandbox rails.<br />Not an official PayPal product.</div>
         </nav>
+        {navOpen && <div className="bo-backdrop" onClick={() => setNavOpen(false)} />}
         <main className="main">
           <div className={"content" + (rail ? " wide" : "")}>
             <Outlet />
