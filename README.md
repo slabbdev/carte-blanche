@@ -16,9 +16,12 @@ in your own browser with WebCrypto. Recorded by `scripts/capture-demo.ts`, serve
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/slabbdev/carte-blanche)
 
-**▶ Live app on Render (PayPal sandbox rails): https://carte-blanche-6jgo.onrender.com** — grant a
-mandate, spend as the agent, watch a real sandbox order get captured, then verify the receipt at
-`/verify/<id>`. Free instance: the first hit after ~15 min idle takes ~50 s to wake.
+**▶ Live app on Render (PayPal sandbox rails): https://carte-blanche-6jgo.onrender.com** — log in
+with a PayPal **sandbox** account (the real Connect-with-PayPal flow — a judges' test account is in
+[Testing](#testing-judges)), grant a mandate, spend as the agent, watch a real sandbox order get
+captured, then verify the receipt at `/verify/<id>`. A PERSONAL account opens on the buyer's seat,
+a BUSINESS account on the seller's Resolution Center. Free instance: the first hit after ~15 min
+idle can take ~50 s to wake.
 
 An AI agent with a payment tool is a walking blank check — today's toolkits will capture an order
 because the model decided to. Carte Blanche is the layer that sits between the agent and PayPal:
@@ -30,8 +33,12 @@ because the model decided to. Carte Blanche is the layer that sits between the a
   with a signed receipt — or a **signed proof of refusal** naming the limit that blocked it.
 - **Sealed journal** — every event lands in an append-only SHA-256 chain with signed checkpoints.
 - **Public verification** — anyone holding a receipt or refusal id can verify all signatures and
-  the journal at `/verify/<id>`, no account needed. Built to become the evidence pack a merchant
-  submits in a PayPal dispute (roadmap).
+  the journal at `/verify/<id>`, no account needed. It *is* the evidence pack: the seller's
+  Resolution Center scores it against PayPal's real evidence slots and submits it to the Disputes
+  API in one click.
+- **The buyer's words, sealed** — the prompt that triggered a purchase (`intent_text`) is hashed
+  and journalled at purchase time and stamped on the receipt: the "I never told my agent that"
+  defense lives on the rail, not in a chat log.
 
 ## Why
 
@@ -99,22 +106,43 @@ Same pattern, different conclusion: it is not a proprietary framework, it is a s
 rail can implement — and the evidence layer (signed refusals included) is what makes it
 auditable after the fact.
 
-## Quickstart (no credentials needed)
+## Prior art and neighbours
+
+The authorization chain is being standardised — by three card networks at once. The buyer's words,
+the signed artifacts and the seller's dispute workflow are not in any of them.
+
+| | Authorization chain | Buyer's words sealed | Signed refusals | Seller dispute workflow | Status |
+|---|---|---|---|---|---|
+| Mastercard [Verifiable Intent](https://verifiableintent.dev) (Mar 2026) | ✅ 3-layer SD-JWT delegation chain, 8 constraint types (amounts, allowlists, budgets, recurrence) | — | — | — | draft v0.1 spec, protocol-agnostic (AP2/ACP/UCP) |
+| Visa [Trusted Agent Protocol](https://corporate.visa.com/en/sites/visa-perspectives/newsroom/visa-unveils-trusted-agent-protocol-for-ai-commerce.html) (Oct 2025) | agent identity: signed agent requests merchants can verify | — | — | — | merchant-side signal, no token |
+| Amex Intent Intelligence Framework (Oct 2026) | ✅ intent + limits → token, non-compliant purchase blocked | — | blocks, no artifact | — | announced |
+| Stripe Link agent purchases | virtual card + spend caps | — | — | — | live (×38 in Sept 2026) |
+| ACP · AP2 · x402 · `@paypal/mcp` | checkout / payment protocols and tools | — | — | — | live |
+| **Carte Blanche** | ✅ signed mandate + agent passports (Ed25519, `did:cb`) | ✅ `intent_text` + SHA-256 on the receipt | ✅ every wall names itself | ✅ coverage matrix, FIGHT / REFUND FIRST, fast lane, trackers, coverage-aware rules | live on PayPal sandbox |
+
+Verifiable Intent is the closest prior art and we read it as confirmation: its constraint types are
+our mandate limits, its "agent proves scope" layer is our passport. Where every spec stops —
+*"the purchase was authorized but badly executed by the agent"* — is where the evidence layer
+starts.
+
+## Quickstart
 
 ```bash
 npm install
 npm run build
 npm start          # rails: mock — clearly labeled MOCK-* ids
-# open http://localhost:8790
 ```
 
-The console lets you grant a mandate, act as the agent, and try to exceed the mandate.
-Every outcome links to its public verification page.
-
-End-to-end scripted scenario (30 seconds, no server needed):
+The web UI logs in **only through Connect with PayPal** (there is no demo form — one PayPal
+account, both faces, like PayPal), so the back-office needs sandbox app credentials (next section)
+plus a sandbox account to sign in with. Without credentials, everything else runs on mock rails:
+the API, the MCP server, and the scripted stories — the fastest way to see the walls hold:
 
 ```bash
-npm run demo
+npm run demo             # mandate → purchases → refusals → verify (30 s, no server)
+npm run demo:intent      # the intent-token pattern, 5 stages + 4 refused deviations
+npm run demo:recurring   # one $40/month mandate, three different walls
+npm run demo:full        # the four-actor story (live catalog with CHANNEL3_API_KEY)
 ```
 
 ## Real PayPal sandbox
@@ -130,6 +158,37 @@ PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm start
 
 Every id and capture then comes from the PayPal sandbox REST API (Orders v2).
 `PAYPAL_MODE=mock` (default) is a dev simulator and never pretends to be PayPal.
+
+## Testing (judges)
+
+Everything below runs against the live app — https://carte-blanche-6jgo.onrender.com — on PayPal
+**sandbox** rails. Judges are not required to test (text, images and video stand alone), but it
+takes about a minute.
+
+**Log in** with Connect with PayPal using a sandbox account — either the one below or any sandbox
+account from your [Developer Dashboard](https://developer.paypal.com/dashboard/accounts). One
+account carries both faces; the sidebar switches seats.
+
+> ⚠️ **Judges' sandbox account (PERSONAL):** `email` · `password` — *filled before submission.*
+> Business sandbox accounts can hit a PayPal-side consent loop ("Un problème est survenu"); the
+> PERSONAL account reaches every page, including the seller's Resolution Center.
+
+1. **Agent console** (`/`) — grant a mandate, type a goal + budget in *Achat automatique*: the
+   agent buys under the mandate, your words are sealed on the receipt. Exceed the cap → a signed
+   refusal names the wall.
+2. **Journey planner** (`/planner`) — search the live catalog, add lines, approve once; inject a
+   sample price drop → lines re-price, already-paid lines are refunded for the difference.
+3. **Oversight** (`/oversight`) — every purchase with its evidence pack; **🛡️ Dispute** seals a
+   contestation before it reaches PayPal.
+4. **Resolution Center** (`/dashboard`) — the seller's seat: pick the case → coverage matrix,
+   FIGHT / REFUND FIRST, fast lane, the evidence pack with the buyer's sealed words, one-click
+   submit to PayPal's Disputes API; deadlines timeline and dispute board.
+5. **Verify** (`/verify`) — paste any receipt or refusal id; every signature and the Merkle
+   inclusion proof check in your browser, no account.
+
+Locally: `PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=… PAYPAL_CLIENT_SECRET=… npm start` with the
+redirect URI `http://localhost:8790/api/auth/paypal/callback` registered on the app; or the
+scripted demos on mock rails (see Quickstart).
 
 ## MCP server — the evidence layer as agent tools
 
@@ -346,6 +405,12 @@ npm run wallet2:watch -- --logical-key <key>   # capture + receipt when approved
 3. **S4a ✓** — Merkle inclusion proofs + signed tree heads on every receipt (portable commitment).
 4. **S4b ✓** — RFC 3161 TSA anchoring of tree heads (`npm run anchor`; openssl-verified by third parties).
 5. **S5 ✓** — principal-held keys: check **"I keep the keys"** in the console and the mandate is Ed25519-signed *in your browser* (WebCrypto) — the server verifies your signature and stores your public key, but never sees your private key and cannot forge the mandate. Enforcement and verification paths are unchanged: whoever holds the key, the walls hold.
+6. **S6 ✓** — the seller's seat: Resolution Center with coverage matrix vs PayPal's evidence slots, FIGHT / REFUND FIRST, fast lane (real refunds), fulfillment slot with real shipment trackers, coverage-aware automation rules, dispute rate and deadline alerts; activation sealing (the buyer's words on the receipt); agent passports; the React back-office behind a real Connect-with-PayPal login.
+
+**Next** — the pre-dispute webhook (our ask to PayPal: Resolution-Center pre-chargeback alerts
+have no API event today), seller → buyer messaging through an API, shipping-label generation on
+top of the trackers, buyer-side filing once the APIs open, and publishing `channel3-lite` and the
+OpenAPI → MCP generator.
 
 ## Status
 

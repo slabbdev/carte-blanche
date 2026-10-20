@@ -1,0 +1,20 @@
+name: keep-warm
+
+# Render's free instance spins down after 15 idle minutes and takes ~50 s to wake —
+# a judge clicking the demo link should never meet that. Ten-minute pings keep it hot
+# through the judging period (one free service fits in Render's 750 h/month).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake the live demo
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 https://carte-blanche-6jgo.onrender.com/openapi.json)
+          echo "openapi.json → HTTP $code"
+          test "$code" = "200"
