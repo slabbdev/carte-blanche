@@ -1,3 +1,29 @@
+# Carte Blanche — Devpost video (v2, React back-office) — 1:16, EN
+
+**Pipeline (fully automated):** `npx tsx scripts/record-video.ts` records the 7 scene takes on
+the running instance (Playwright, 1440×900; `CB_SESSION_COOKIE` = a local test session), the
+voiceovers are `say -v Samantha -r 185` (texts below, `docs/video/vo2/`), title/end cards are
+browser-rendered PNGs (`cards/`), `./docs/video/assemble.sh` cuts each take to its VO and concatenates.
+Output: `docs/video/carte-blanche-demo.mp4` (v1, pre-React: `carte-blanche-demo-v1.mp4`).
+
+| # | Scene | Take | VO |
+|---|---|---|---|
+| 1 | Hook — the refusal | console: 45.00 against a 30.00 cap → REFUSED OVER_PER_TRANSACTION, signed proof link | Give an AI agent a payment tool, and you hand it a blank check. At Carte Blanche, a forty-five dollar attempt against a thirty dollar cap does not get an error. It gets signed proof. |
+| 2 | Grant | console: grant form → Grant mandate | Authority is a document, not a prompt. The mandate is Ed25519-signed and immutable: per-transaction cap, total cap, revocable in one click. |
+| 3 | Sealed activation | console: "buy me two USB-C cables, max 25 dollars" → Acheter maintenant → RECEIPT + steps + "your words are sealed" | Type what you want, and a budget. The agent shops the live catalog, buys the best offer under the mandate, and your exact words are sealed into the receipt. That is the seller's answer to: "I never told my agent that." |
+| 4 | The seller | /dashboard → case drawer: REFUND FIRST, coverage, fast lane, Contacter l'acheteur, evidence pack | On the seller's side, every case is scored against PayPal's real evidence slots: fight or refund first, a fast-lane refund, an amicable message, and the evidence pack, submitted to PayPal in one click. |
+| 5 | AG Studio | /analytics: Threshold KPI tiles, charts, agent prompt starters | Sellers also get AG Studio: dashboards over PayPal's own records and the evidence layer — dispute rate against PayPal's 1.5 % threshold, walls that held, and agents that build widgets from a sentence, running on our server, never the browser. |
+| 6 | Verify | /verify | Every receipt and refusal verifies publicly: signatures, Merkle proof, no account. |
+| 7 | Close | console | PayPal's tools. Your rules. Signed evidence. Carte Blanche — agentic commerce you can audit. |
+
+Rules check: < 3 min ✓ · shows the project functioning ✓ · no third-party music ✓ · PayPal's name
+in nominative use only, no PayPal logo assets (the PayPal button is their own SDK) ✓. Upload to
+YouTube (public) and paste the link in the Devpost form.
+
+---
+
+## v1 script (pre-React, kept for reference)
+
 # Carte Blanche — Devpost video script (< 3 min, EN)
 
 Target: 2:45 runtime. Full-screen screencast, minimal on-screen captions (the

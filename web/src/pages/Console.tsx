@@ -207,7 +207,11 @@ export default function Console() {
       const avail = await api<{ llm: boolean }>("/api/agent/autopilot");
       setApMode(avail.llm ? '<span class="pill paypal">LLM POLICY</span>' : '<span class="pill mock">SCRIPTED POLICY</span>');
       const r = await api<any>("/api/agent/autopilot", { method: "POST", body: JSON.stringify({ mandate_id: selMandate, goal: apGoal || desc }) });
-      setApOut(`<div class="card-item"><b>steps</b><div class="mono">${esc((r.transcript ?? []).map((s: any) => s.summary ?? s.action ?? "").join(" · "))}</div></div>`);
+      const steps = (r.steps ?? r.transcript ?? []) as any[];
+      const lines = steps.map((s: any) => `<div>→ <b>${esc(String(s.action ?? s.summary ?? ""))}</b>${s.detail ? ` — ${esc(String(s.detail))}` : ""}</div>`).join("");
+      const verdict = r.outcome === "receipt" ? '<span class="pill ok">RECEIPT</span>' : r.outcome === "refused" ? '<span class="pill warn">REFUSED — signed proof</span>' : `<span class="pill mock">${esc(String(r.outcome ?? ""))}</span>`;
+      const art = r.artifactId ? ` <a href="/verify/${esc(String(r.artifactId))}">${esc(String(r.artifactId))} → verify</a>` : "";
+      setApOut(`<div class="card-item">${verdict}${art}<div class="mono" style="margin-top:6px">${lines}</div><div class="muted" style="font-size:12px;margin-top:6px">your words are sealed on the receipt (sha256) — the seller's answer to "I never asked for that"</div></div>`);
       await refreshOutcomes();
     } catch (e: any) { setApMode(""); setApOut("✗ " + esc(e.message)); }
   }

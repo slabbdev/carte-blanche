@@ -237,7 +237,7 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
 - ⚠️ Live app (PayPal sandbox): https://carte-blanche-6jgo.onrender.com
 - ⚠️ Interactive explainer: https://slabbdev.github.io/carte-blanche/
 - ⚠️ Repo: https://github.com/slabbdev/carte-blanche
-- ⚠️ Video (< 3 min, YouTube public): **TO UPLOAD** — re-shot on the React back-office
+- ⚠️ Video (< 3 min, YouTube public): `docs/video/carte-blanche-demo.mp4` (1:16, React back-office) — **upload to YouTube and paste the link here**
 - Contract: https://carte-blanche-6jgo.onrender.com/openapi.json · `llms.txt` at the root ·
   `/docs` API reference · Postman collection: `docs/postman/carte-blanche.postman_collection.json`
 
