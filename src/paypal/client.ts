@@ -54,7 +54,8 @@ export class PayPalClient {
     return this.cfg.env;
   }
 
-  private async accessToken(): Promise<string> {
+  /** Bearer for PayPal REST — also what the gateway hands PayPal's own MCP server. */
+  async accessToken(): Promise<string> {
     const now = Date.now();
     if (this.token && this.token.expiresAt - 60_000 > now) return this.token.value;
     const res = await this.fetchImpl(`${HOSTS[this.cfg.env]}/v1/oauth2/token`, {

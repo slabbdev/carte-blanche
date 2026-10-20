@@ -6,7 +6,7 @@ import type { Keys } from "../lib/keys.js";
 import type { Journal } from "../journal/journal.js";
 import type { TsaClient } from "../journal/tsa.js";
 import type { MandateStore } from "../mandate/store.js";
-import { formatAmount, parseAmount, recurrenceWindow, type SignedMandate } from "../mandate/mandate.js";
+import { formatAmount, parseAmount, recurrenceWindow, type Mandate, type SignedMandate } from "../mandate/mandate.js";
 import { verifyMandate } from "../mandate/signing.js";
 import type { PaymentRails } from "../paypal/adapter.js";
 import {
@@ -69,6 +69,27 @@ export type Outcome =
   | { kind: "receipt"; receipt: Receipt; full: FullReceipt }
   | { kind: "denial"; denial: Denial; full: FullDenial }
   | { kind: "pending"; logicalKey: string; mandateId: string; orderId: string; approvalUrl: string };
+
+/**
+ * The walls without the rails: what an external tool call (PayPal's own MCP
+ * tools behind the gateway) asks before it is forwarded. `amount` absent means
+ * "authority only" — the mandate must exist, verify, be live and in window,
+ * but no money is counted (a product update, an invoice draft).
+ */
+export interface AuthorizeRequest {
+  mandateId: string;
+  description: string;
+  amount?: string;
+  currency?: string;
+  payee?: string;
+  logicalKey?: string;
+  intent?: PurchaseRequest["intent"];
+  agentProof?: PurchaseRequest["agentProof"];
+}
+
+export type AuthorizeOutcome =
+  | { kind: "authorized"; logicalKey: string; mandate: SignedMandate; amountMinor: bigint; executedBy?: { passportId: string; did: string } }
+  | { kind: "denial"; denial: Denial; full: FullDenial };
 
 interface StoredState {
   receipts: Receipt[];
@@ -149,40 +170,78 @@ export class Enforcer {
     return outcome;
   }
 
-  private async process(logicalKey: string, req: PurchaseRequest): Promise<Outcome> {
-    const deny = (reasonCode: DenialReason, reasonDetail: string): Outcome => {
-      const denial: Denial = {
-        denialId: newDenialId(logicalKey),
-        mandateId: req.mandateId,
-        logicalKey,
-        createdAt: new Date(this.now()).toISOString(),
-        requested: {
-          amount: req.amount,
-          currency: req.currency,
-          payee: req.payee,
-          description: req.description,
-        },
-        reasonCode,
-        reasonDetail,
-        chainTip: this.journal.tip(),
-        journalLength: this.journal.length,
-      };
-      this.journal.append("purchase_denied", {
-        mandate_id: req.mandateId,
-        logical_key: logicalKey,
-        denial_id: denial.denialId,
-        requested: { amount: req.amount, currency: req.currency, payee: req.payee },
-        reason_code: reasonCode,
-        reason_detail: reasonDetail,
-      }, denial.createdAt);
-      this.denials.set(denial.denialId, denial);
-      this.persist();
-      const signed = this.store.get(req.mandateId);
-      const full = signed
-        ? this.assembleDenial(denial, signed)
-        : this.assembleDenialWithoutMandate(denial);
-      return { kind: "denial", denial, full };
+  /**
+   * Run the walls for a call Carte Blanche does not execute itself. Refusals
+   * are the same signed denials a purchase gets (verifiable at /verify); an
+   * authorization is a decision, not a spend — the caller journals the money
+   * when it actually moves (`external_spend`), which is what the caps count.
+   */
+  async authorize(req: AuthorizeRequest): Promise<AuthorizeOutcome> {
+    const logicalKey = req.logicalKey ?? defaultLogicalKey({
+      mandateId: req.mandateId, amount: req.amount ?? "0", currency: req.currency ?? "", payee: req.payee, description: req.description,
+    });
+    const signedBefore = this.store.get(req.mandateId);
+    const currency = req.currency ?? signedBefore?.mandate.limits.currency ?? "";
+    const probe: PurchaseRequest = {
+      mandateId: req.mandateId,
+      amount: req.amount ?? "0.00",
+      currency,
+      payee: req.payee,
+      description: req.description,
+      logicalKey,
+      intent: req.intent,
+      agentProof: req.agentProof,
     };
+    const walls = this.checkWalls(logicalKey, probe, req.amount === undefined);
+    if (walls.kind === "denial") return walls;
+    return { kind: "authorized", logicalKey, mandate: walls.signed, amountMinor: walls.amountMinor, executedBy: walls.executedBy };
+  }
+
+  private makeDenial(logicalKey: string, req: PurchaseRequest, reasonCode: DenialReason, reasonDetail: string): Outcome & { kind: "denial" } {
+    const denial: Denial = {
+      denialId: newDenialId(logicalKey),
+      mandateId: req.mandateId,
+      logicalKey,
+      createdAt: new Date(this.now()).toISOString(),
+      requested: {
+        amount: req.amount,
+        currency: req.currency,
+        payee: req.payee,
+        description: req.description,
+      },
+      reasonCode,
+      reasonDetail,
+      chainTip: this.journal.tip(),
+      journalLength: this.journal.length,
+    };
+    this.journal.append("purchase_denied", {
+      mandate_id: req.mandateId,
+      logical_key: logicalKey,
+      denial_id: denial.denialId,
+      requested: { amount: req.amount, currency: req.currency, payee: req.payee },
+      reason_code: reasonCode,
+      reason_detail: reasonDetail,
+    }, denial.createdAt);
+    this.denials.set(denial.denialId, denial);
+    this.persist();
+    const signed = this.store.get(req.mandateId);
+    const full = signed
+      ? this.assembleDenial(denial, signed)
+      : this.assembleDenialWithoutMandate(denial);
+    return { kind: "denial", denial, full };
+  }
+
+  /**
+   * Every wall, in order, each answered with a signed denial naming it:
+   * existence → signature → revocation → window → currency → amount → per-tx
+   * cap → allowlist → recurring window cap → total cap → agent passport.
+   * `authorityOnly` skips the money walls (a call that moves no money still
+   * needs a live mandate behind it).
+   */
+  private checkWalls(logicalKey: string, req: PurchaseRequest, authorityOnly = false):
+    | (Outcome & { kind: "denial" })
+    | { kind: "ok"; signed: SignedMandate; amountMinor: bigint; rec?: NonNullable<Mandate["limits"]["recurrence"]>; win?: ReturnType<typeof recurrenceWindow>; executedBy?: { passportId: string; did: string } } {
+    const deny = (reasonCode: DenialReason, reasonDetail: string) => this.makeDenial(logicalKey, req, reasonCode, reasonDetail);
 
     const signed = this.store.get(req.mandateId);
     if (!signed) return deny("MANDATE_NOT_FOUND", `no mandate with id ${req.mandateId}`);
@@ -200,6 +259,20 @@ export class Enforcer {
     const end = Date.parse(mandate.limits.windowEnd);
     if (now < start) return deny("WINDOW_NOT_OPEN", `window opens at ${mandate.limits.windowStart}`);
     if (now > end) return deny("WINDOW_EXPIRED", `window closed at ${mandate.limits.windowEnd}`);
+
+    // agent passport proof-of-possession: WHICH software instance is calling
+    let executedBy: { passportId: string; did: string } | undefined;
+    if (req.agentProof) {
+      const ok = this.passports?.verifyProof(req.agentProof.agentId, logicalKey, req.agentProof.ts, req.agentProof.signature);
+      if (!ok) {
+        return deny("MANDATE_TAMPERED", `agent passport proof invalid for ${req.agentProof.agentId} — the caller is not the registered agent instance`);
+      }
+      const pp = this.passports?.get(req.agentProof.agentId);
+      executedBy = { passportId: req.agentProof.agentId, did: pp!.did };
+    }
+
+    if (authorityOnly) return { kind: "ok", signed, amountMinor: 0n, executedBy };
+
     if (req.currency !== mandate.limits.currency) {
       return deny("CURRENCY_MISMATCH", `mandate is denominated in ${mandate.limits.currency}`);
     }
@@ -255,19 +328,16 @@ export class Enforcer {
       );
     }
 
-    // --- authorized: journal intent, then execute with deterministic ids ---
-    const at = new Date(now).toISOString();
+    return { kind: "ok", signed, amountMinor, rec: rec ?? undefined, win, executedBy };
+  }
 
-    // agent passport proof-of-possession: WHICH software instance executed
-    let executedBy: { passportId: string; did: string } | undefined;
-    if (req.agentProof) {
-      const ok = this.passports?.verifyProof(req.agentProof.agentId, logicalKey, req.agentProof.ts, req.agentProof.signature);
-      if (!ok) {
-        return deny("MANDATE_TAMPERED", `agent passport proof invalid for ${req.agentProof.agentId} — the caller is not the registered agent instance`);
-      }
-      const pp = this.passports?.get(req.agentProof.agentId);
-      executedBy = { passportId: req.agentProof.agentId, did: pp!.did };
-    }
+  private async process(logicalKey: string, req: PurchaseRequest): Promise<Outcome> {
+    const walls = this.checkWalls(logicalKey, req);
+    if (walls.kind === "denial") return walls;
+    const { signed, amountMinor, rec, win, executedBy } = walls;
+
+    // --- authorized: journal intent, then execute with deterministic ids ---
+    const at = new Date(this.now()).toISOString();
     this.journal.append("purchase_requested", {
       mandate_id: req.mandateId,
       logical_key: logicalKey,

@@ -246,7 +246,8 @@ export class Journal {
   capturedMinorFor(mandateId: string, bounds?: { fromMs?: number; toMs?: number }): bigint {
     let total = 0n;
     for (const e of this.eventsFor((d) => d.mandate_id === mandateId)) {
-      if (e.type !== "order_captured") continue;
+      // our own captures, plus money that moved through PayPal's tools behind the gateway
+      if (e.type !== "order_captured" && e.type !== "external_spend") continue;
       if (bounds) {
         const ts = Date.parse(e.ts);
         if (bounds.fromMs !== undefined && ts < bounds.fromMs) continue;

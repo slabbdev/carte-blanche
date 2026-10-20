@@ -38,6 +38,13 @@ MCP server: `mcp/server.ts` in the repo (`npm run mcp`) — the same API as agen
 - POST /api/mandates/:id/revoke — revoke immediately (journalled).
 - POST /api/agent/purchase — THE agent boundary: receipt or signed refusal.
 - POST /api/agent/purchase/resume — complete a wallet purchase after buyer approval.
+- GET  /api/paypal-tools — PayPal's 28 official agent tools (@paypal/mcp) available BEHIND THE WALL,
+  each with its class: spend (create_order, pay_order, create_refund), write, read.
+- POST /api/paypal-tools/:tool — call PayPal's own tool with PayPal's own `arguments`, under
+  `mandate_id` (required for every tool). Spend tools are measured against the mandate first
+  (pay_order reads the order back before capturing); a refusal is a signed denial (verify it at
+  /verify/<id>) and PayPal is never called. Pass `intent_text` = the user's exact words.
+  The MCP server mounts these as `paypal_<tool>`.
 - GET  /api/receipts?mandate_id= — your receipts and refusals.
 - GET  /api/verify/receipts/:id, /api/verify/denials/:id — full verification report (public, no account).
 - GET  /api/journal/verify — chain integrity. /api/journal/events — raw sealed events.

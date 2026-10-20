@@ -41,7 +41,7 @@ half: *"the delicate case is when the purchase was authorized but badly executed
 hence the value of keeping a clear trace of your instructions."* No protocol writes down what
 happens then — who holds the buyer's words, what the seller submits, which of PayPal's evidence
 slots it fits. We verified the gap on PayPal's own surfaces: the official `@paypal/mcp` server
-moves money with no approval hook, the official AI-Toolkit ships best practices but no
+moves money with no approval hook (so we put it behind ours — see below), the official AI-Toolkit ships best practices but no
 enforcement, and pre-dispute alerts have **no webhook at all** (verified: `PRE_DISPUTE_ACTIVITY`
 is not a valid event name). So we built the layer where authorization becomes evidence — for the
 buyer, the seller and the agent, verifiable by anyone, with no trust in us.
@@ -95,7 +95,14 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
 
 **For agents and integrators**
 
-- An **MCP server** (14 tools) exposing the same API as agent tools — the purchase tool documents
+- **PayPal's own agent tools, behind the wall** — the instance runs PayPal's official MCP server
+  (`@paypal/mcp`) as a child and re-exposes all **28 tools** unchanged (`paypal_create_order`,
+  `paypal_pay_order`, `paypal_create_refund`, invoices, subscriptions, tracking, disputes…) with
+  one rule: a live signed mandate for every call, the money walls for the three that spend
+  (`pay_order` reads the order back before capturing), signed denials for refusals, and the sealed
+  journal for everything forwarded. Live-proven on sandbox: an order created through the wall, a
+  45 USD order refused at a 30 USD cap before PayPal heard about it.
+- An **MCP server** (14 tools of ours + the 28 above = 42) exposing the same API as agent tools — the purchase tool documents
   `intent_text` as MUST-pass; `llms.txt` for agents that read before they act; an OpenAPI 3.0
   contract validated by APIMatic with a generated TypeScript SDK and a prototype that generates
   an MCP server (23 tools) straight from the spec.
@@ -115,7 +122,10 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
   (real balance via `ending_balance`, agent-marker detection via `custom_field`), Webhooks with
   signature verification (`CUSTOMER.DISPUTE.*`, `PAYMENT.CAPTURE.COMPLETED`), and **Identity /
   Connect with PayPal (OpenID Connect)** — the only way to log in: no demo form, one PayPal
-  account, both faces. Wallet flow with `@paypal/react-paypal-js`.
+  account, both faces. Wallet flow with `@paypal/react-paypal-js`. **PayPal's AI tools too**: the
+  official MCP server (`@paypal/mcp`, on their agent-toolkit) runs inside the instance and its 28
+  tools are served through the enforcer — we did not rebuild PayPal's tools, we put the walls
+  around them.
 - **Cryptography** — Ed25519 (server-custodial AND non-custodial: the browser can hold the
   principal's keys via WebCrypto, the server verifies only), canonical JSON under every
   signature, padded Merkle trees for inclusion proofs, RFC 3161 timestamp tokens anchored into
@@ -174,6 +184,9 @@ buyer, the seller and the agent, verifiable by anyone, with no trust in us.
   seller's pack as its own section.
 - **Coverage-aware automation** — the only dispute auto-rules we know of that read the signed
   mandate before refunding.
+- **PayPal's 28 official agent tools behind the wall** — `@paypal/mcp` unchanged, every call under
+  a signed mandate; `pay_order` reads the order back before capturing; a 422 "payer has not
+  approved" is recognised as not-a-spend and never counted.
 - **Agent purchases visible on PayPal's side** via `custom_id` — a bridge PayPal can adopt with
   zero effort; the **AP2 mapping**: every "future work" item in PayPal's AP2 docs has a running
   counterpart here (docs/AP2-ALIGNMENT.md).

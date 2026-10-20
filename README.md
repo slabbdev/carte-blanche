@@ -117,7 +117,7 @@ the signed artifacts and the seller's dispute workflow are not in any of them.
 | Visa [Trusted Agent Protocol](https://corporate.visa.com/en/sites/visa-perspectives/newsroom/visa-unveils-trusted-agent-protocol-for-ai-commerce.html) (Oct 2025) | agent identity: signed agent requests merchants can verify | — | — | — | merchant-side signal, no token |
 | Amex Intent Intelligence Framework (Oct 2026) | ✅ intent + limits → token, non-compliant purchase blocked | — | blocks, no artifact | — | announced |
 | Stripe Link agent purchases | virtual card + spend caps | — | — | — | live (×38 in Sept 2026) |
-| ACP · AP2 · x402 · `@paypal/mcp` | checkout / payment protocols and tools | — | — | — | live |
+| ACP · AP2 · x402 · `@paypal/mcp` | checkout / payment protocols and tools | — | — | — | live — and `@paypal/mcp` now runs **behind our wall** (28 tools, same arguments) |
 | **Carte Blanche** | ✅ signed mandate + agent passports (Ed25519, `did:cb`) | ✅ `intent_text` + SHA-256 on the receipt | ✅ every wall names itself | ✅ coverage matrix, FIGHT / REFUND FIRST, fast lane, trackers, coverage-aware rules | live on PayPal sandbox |
 
 Verifiable Intent is the closest prior art and we read it as confirmation: its constraint types are
@@ -195,10 +195,11 @@ scripted demos on mock rails (see Quickstart).
 ## MCP server — the evidence layer as agent tools
 
 `npm run mcp` starts a stdio MCP server (works with Claude Desktop, Claude Code, any MCP client).
-Thirteen tools — `search_catalog`, `grant_mandate`, `mandate_status`, `purchase`, `my_artifacts`,
+Fourteen tools of ours — `search_catalog`, `grant_mandate`, `mandate_status`, `purchase`, `my_artifacts`,
 `verify_artifact`, `recall_preferences`/`save_preference`, `plan_journey`/`approve_journey`/
-`run_journey`… — all funnelled through the same enforcer: the model gets a signed receipt or a
-signed refusal, never rail access. Point `CB_BASE_URL` at any instance.
+`run_journey`… — plus **PayPal's 28 official tools mounted behind the wall** (`paypal_*`, below):
+42 tools, all funnelled through the same enforcer. The model gets a signed receipt or a signed
+refusal, never rail access. Point `CB_BASE_URL` at any instance.
 
 The console has an **🤖 Autopilot** button: one click runs the agent server-side under the selected
 mandate — the LLM loop when `OPENAI_API_KEY` is set, a deterministic scripted policy otherwise
@@ -206,11 +207,30 @@ mandate — the LLM loop when `OPENAI_API_KEY` is set, a deterministic scripted 
 artifacts and the run itself are journalled (`agent_autopilot_run`). The browser never holds rails
 access or keys.
 
-Compare with PayPal's own official MCP server (`@paypal/mcp`): it gives agents `create_order`,
-`pay_order`, `create_refund` — with nothing but an access token. No mandates, no limits, no
-enforcement, no evidence. **Their server gives agents the keys; ours gives them the walls** — and
-the two compose in one Claude Desktop config. Agent-readable API map at
-[`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
+### PayPal's own tools, behind the wall
+
+PayPal's official MCP server (`@paypal/mcp`, built on their agent-toolkit) gives an agent
+`create_order`, `pay_order`, `create_refund` and 25 more tools — with nothing but an access token.
+No mandates, no limits, no evidence. We did not replace it: **the instance runs `@paypal/mcp` as a
+child and re-exposes all 28 tools as `paypal_<name>`, same arguments, behind the wall.**
+
+| Class | Tools | Rule |
+|---|---|---|
+| **spend** | `create_order`, `pay_order`, `create_refund` | measured against the mandate first — `create_order` priced from its items, **`pay_order` reads the order back (`get_order`) before capturing**, `create_refund` needs an explicit amount (a mandate cannot cover "whatever the capture was") |
+| **write** | invoices, products, plans, subscriptions, tracking, `accept_dispute_claim` | a live signed mandate is required (authority), no money counted |
+| **read** | `list_*`, `get_*`, `show_*`, `generate_*` | forwarded under a live mandate, journalled |
+
+A refusal is the same signed denial a purchase gets, verifiable at `/verify/<id>`; PayPal is never
+called. Forwarded calls land in the sealed journal (`external_call_authorized` →
+`external_call_completed` / `external_call_failed` / `external_spend`), and money is counted
+against the caps only when PayPal confirms it moved — a `422 payer has not approved` arrives as a
+perfectly well-formed JSON answer, and is not a spend. REST: `GET /api/paypal-tools`,
+`POST /api/paypal-tools/:tool` (`mandate_id`, `arguments`, `intent_text`). Live-proven on sandbox:
+order `94530697LT008715N` created through the wall at 24.50 USD; a 45.00 USD order refused with
+`deny-f3fa3742709325f8` (`OVER_PER_TRANSACTION`) before PayPal heard about it.
+
+**Their server gives agents the keys; ours gives them the walls — and now the keys come through the
+walls.** Agent-readable API map at [`/llms.txt`](https://carte-blanche-6jgo.onrender.com/llms.txt).
 
 ## Agent-purchase detection — labeled on PayPal's own records
 

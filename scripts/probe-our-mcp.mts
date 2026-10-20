@@ -1,0 +1,12 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+const transport = new StdioClientTransport({ command: "npx", args: ["tsx", "mcp/server.ts"], env: { ...process.env as Record<string, string>, CB_BASE_URL: "http://localhost:8790" }, stderr: "pipe" });
+const client = new Client({ name: "cb-self-probe", version: "0" });
+await client.connect(transport);
+const { tools } = await client.listTools();
+const pp = tools.filter(t => t.name.startsWith("paypal_"));
+console.log(`our tools: ${tools.length} total, ${pp.length} paypal_* behind the wall`);
+console.log(pp.slice(0, 6).map(t => t.name).join(" "), "…");
+const d = tools.find(t => t.name === "paypal_create_order")?.description ?? "";
+console.log("paypal_create_order description head:", d.slice(0, 160).replace(/\n/g, " "));
+await client.close();

@@ -29,6 +29,8 @@ loadEnvFile();
 
 import { TsaClient, parseTimestampResponse, verifyTimestampToken } from "./journal/tsa.js";
 import { llmConfigured, runLlmTurn } from "./ai/llmTurn.js";
+import { PayPalMcpUpstream } from "./gateway/paypalMcpUpstream.js";
+import { PayPalToolGateway } from "./gateway/paypalGateway.js";
 
 const PORT = Number(process.env.PORT ?? 8790);
 const KEYS_DIR = process.env.KEYS_DIR ?? ".keys";
@@ -57,6 +59,18 @@ const disputes = new DisputeService({
 // Purchase journeys: planned baskets that derive their own signed mandate and
 // execute line by line through the enforcer (see /planner).
 const paypal = makePayPalClient(process.env); // shared REST client (disputes + webhook verification)
+// PayPal's own MCP tools (@paypal/mcp), handed to agents only through the wall.
+// Real rails only: the child process needs a bearer, and mock rails have no PayPal to speak to.
+const paypalTools = paypal
+  ? new PayPalToolGateway(
+      new PayPalMcpUpstream({
+        tokenProvider: () => paypal.accessToken(),
+        environment: paypal.env === "live" ? "PRODUCTION" : "SANDBOX",
+      }),
+      enforcer,
+      journal,
+    )
+  : undefined;
 const disputeRules = new DisputeRuleStore(path.join(STATE_DIR, "dispute-rules.json"));
 configureAutopilot(journal, catalog, store, `http://localhost:${PORT}`);
 const journeys = new JourneyPlanner(STATE_DIR, journal);
@@ -1507,6 +1521,69 @@ app.get("/api/paypal/money", async (req, res) => {
     });
   } catch (e) {
     res.status(502).json({ error: `paypal money view failed: ${(e as Error).message}` });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PayPal's official agent tools, behind the wall. Same 28 tools as @paypal/mcp,
+// same arguments — plus one rule: no live signed mandate, no tool; money-moving
+// tools (create_order, pay_order, create_refund) are measured against the
+// mandate first, pay_order reads the order back before capturing, and every
+// forwarded call lands in the sealed journal. Refusals are signed denials.
+// ---------------------------------------------------------------------------
+app.get("/api/paypal-tools", async (_req, res) => {
+  if (!paypalTools) return res.status(503).json({ error: "PayPal tools need real rails (sandbox credentials) — mock mode has no PayPal to speak to" });
+  try {
+    const tools = await paypalTools.tools();
+    res.json({
+      upstream: "@paypal/mcp",
+      rule: "every tool requires mandate_id (a live signed mandate); spend tools are measured against the mandate's walls before being forwarded",
+      tools: tools.map((t) => ({ name: t.name, class: t.class, requiresMandate: true, description: t.description, inputSchema: t.inputSchema })),
+    });
+  } catch (e) {
+    res.status(502).json({ error: `paypal mcp unavailable: ${(e as Error).message}` });
+  }
+});
+
+app.post("/api/paypal-tools/:tool", async (req, res) => {
+  if (!paypalTools) return res.status(503).json({ error: "PayPal tools need real rails (sandbox credentials)" });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const args = (body.arguments ?? {}) as Record<string, unknown>;
+  if (typeof args !== "object" || Array.isArray(args)) return res.status(400).json({ error: "arguments must be an object" });
+  try {
+    const outcome = await paypalTools.invoke({
+      tool: req.params.tool,
+      arguments: args,
+      mandateId: typeof body.mandate_id === "string" ? body.mandate_id : undefined,
+      logicalKey: typeof body.logical_key === "string" ? body.logical_key : undefined,
+      ...(body.intent_text ? {
+        intent: {
+          text: String(body.intent_text),
+          ...(body.intent_channel ? { channel: String(body.intent_channel) } : {}),
+          ...(body.intent_session ? { sessionRef: String(body.intent_session) } : {}),
+        },
+      } : {}),
+      ...(body.agent_passport_id && body.agent_proof_signature ? {
+        agentProof: {
+          agentId: String(body.agent_passport_id),
+          signature: String(body.agent_proof_signature),
+          ts: String(body.agent_proof_ts ?? new Date().toISOString()),
+        },
+      } : {}),
+    });
+    if (outcome.kind === "denial") {
+      return res.json({ outcome: "denial", tool: outcome.tool, class: outcome.class, ...outcome.full });
+    }
+    res.json({
+      outcome: "forwarded",
+      tool: outcome.tool,
+      class: outcome.class,
+      upstreamError: outcome.upstreamError,
+      result: outcome.result,
+      evidence: outcome.evidence,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `paypal tool failure: ${(e as Error).message}` });
   }
 });
 

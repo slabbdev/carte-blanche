@@ -25,7 +25,7 @@ async function api(path: string, init?: RequestInit): Promise<unknown> {
   return data;
 }
 
-const server = new McpServer({ name: "carte-blanche", version: "0.5.0" });
+const server = new McpServer({ name: "carte-blanche", version: "0.6.0" });
 
 server.tool(
   "healthz",
@@ -196,6 +196,47 @@ server.tool(
     content: [{ type: "text", text: JSON.stringify(await api(`/api/journeys/${encodeURIComponent(journey_id)}/run`, { method: "POST", body: JSON.stringify(cycle ? { cycle } : {}) }), null, 2) }],
   }),
 );
+
+// ---------------------------------------------------------------------------
+// PayPal's own tools, behind the wall. The instance runs @paypal/mcp as a child
+// and re-exposes its 28 tools here as paypal_<name>, same arguments — with one
+// rule: every call needs a live signed mandate, spend tools are measured against
+// its walls first (pay_order reads the order back before capturing), refusals
+// are signed denials, forwarded calls land in the sealed journal. On mock rails
+// the instance has no PayPal to speak to and these tools simply do not appear.
+// ---------------------------------------------------------------------------
+interface GatewayTool { name: string; class: "read" | "write" | "spend"; description: string; inputSchema: unknown }
+try {
+  const listed = (await api("/api/paypal-tools")) as { tools: GatewayTool[] };
+  for (const t of listed.tools) {
+    const schema = JSON.stringify(t.inputSchema ?? {});
+    const classNote = t.class === "spend"
+      ? "SPEND — measured against the mandate's walls before PayPal is called; a refusal is a signed denial naming the wall. Pass intent_text (the user's exact words)."
+      : t.class === "write"
+        ? "WRITE — changes PayPal state without moving money; needs a live mandate."
+        : "READ — forwarded under a live mandate and journalled.";
+    server.tool(
+      `paypal_${t.name}`,
+      `[PayPal official tool via the Carte Blanche wall · ${classNote}] ${t.description.trim().slice(0, 700)}\n\nArguments schema (PayPal's own): ${schema.slice(0, 1500)}`,
+      {
+        mandate_id: z.string().describe("The live signed mandate this call acts under (grant_mandate)"),
+        arguments: z.record(z.unknown()).describe(`PayPal's own arguments for ${t.name} — see the schema in the tool description`),
+        intent_text: z.string().optional().describe("The user's verbatim words that asked for this — sealed into the journal"),
+        intent_channel: z.string().optional(),
+        intent_session: z.string().optional(),
+      },
+      async (a) => ({
+        content: [{
+          type: "text",
+          text: JSON.stringify(await api(`/api/paypal-tools/${encodeURIComponent(t.name)}`, { method: "POST", body: JSON.stringify(a) }), null, 2),
+        }],
+      }),
+    );
+  }
+  console.error(`carte-blanche mcp: ${listed.tools.length} PayPal tools mounted behind the wall`);
+} catch (e) {
+  console.error(`carte-blanche mcp: PayPal tools not mounted (${(e as Error).message}) — the instance is on mock rails or unreachable`);
+}
 
 await server.connect(new StdioServerTransport());
 console.error(`carte-blanche MCP server ready (${BASE})`);

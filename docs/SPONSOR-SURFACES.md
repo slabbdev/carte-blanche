@@ -20,7 +20,7 @@ own public artifacts (SDKs, packages, APIs, docs), not from memory. Updated 2026
 | Fulfillment slot (`tracking_info` structured for `PROOF_OF_FULFILLMENT`) | ✅ | `POST /api/orders/:orderId/fulfillment` — journalled, every pack on that order gains the slot |
 | Transaction Search (`custom_field` = our agent marker, PayPal-side detection) | ✅ | `npm run tx:label-proof` |
 | Webhooks (+ signature verification via `verify-webhook-signature`) | ✅ | `POST /api/webhooks/paypal` (`PAYPAL_WEBHOOK_ID` to activate verification) |
-| Their official MCP server (`@paypal/mcp`) | ✅ analyzed | the gap-proof: money-moving tools, zero walls — pairs with ours |
+| Their official MCP server (`@paypal/mcp`) | ✅ **INTEGRATED behind the wall** (`src/gateway/`) | runs as a child of the instance; all 28 tools re-exposed as `paypal_*` under a live mandate — spend tools measured first (`pay_order` reads the order back), refusals = signed denials, forwarded calls journalled, money counted only when PayPal confirms it moved. Live-proven: order `94530697LT008715N` through the wall, `deny-f3fa3742709325f8` for 45 USD over a 30 cap |
 | AP2 (Intent/Cart/Payment Mandates) | ✅ aligned | `docs/AP2-ALIGNMENT.md` |
 | OAuth client-credentials token cache | ✅ | client |
 | **AI-Toolkit** (github.com/paypal/AI-Toolkit): skill + hooks + MCP integration for Claude Code/Codex/Cursor | ✅ analyzed — **their own dev plugin injects "PayPal best practices" into agents; it ships NO enforcement either** — second confirmation of the gap from their own tooling | — |
